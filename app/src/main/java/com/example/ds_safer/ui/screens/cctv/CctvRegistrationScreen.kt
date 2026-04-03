@@ -25,6 +25,7 @@ fun CctvRegistrationScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .systemBarsPadding()
             .padding(24.dp)
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -32,21 +33,9 @@ fun CctvRegistrationScreen(
         Text("CCTV 카메라 등록", style = MaterialTheme.typography.headlineSmall)
 
         OutlinedTextField(
-            value = viewModel.name,
-            onValueChange = { viewModel.name = it },
-            label = { Text("카메라 이름 (예: 거실)") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = viewModel.ipAddress,
-            onValueChange = { viewModel.ipAddress = it },
-            label = { Text("카메라 IP 주소") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = viewModel.port,
-            onValueChange = { viewModel.port = it },
-            label = { Text("포트 (기본 554)") },
+            value = viewModel.ipAddr,
+            onValueChange = {viewModel.ipAddr = it},
+            label = {Text("윤정아")},
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(

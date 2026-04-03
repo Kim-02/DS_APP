@@ -1,107 +1,149 @@
 package com.example.ds_safer.ui.screens.main
 
-import androidx.compose.ui.graphics.Color
+import AuthViewModel
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ds_safer.domain.model.JetsonDevice
+import com.example.ds_safer.ui.screens.discovery.DiscoveryViewModel // ★ 패키지 경로 확인 필요!
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainDashboardScreen(
-    viewModel: MainDashboardViewModel = viewModel(),
-    onNavigateToJetson: () -> Unit,
-    onNavigateToSensor: () -> Unit,
-    onNavigateToCctv: () -> Unit
+    viewModel: DiscoveryViewModel,
+    authViewModel: AuthViewModel,
+    onNavigateToDetail: (JetsonDevice) -> Unit,
+    onLogoutClick: () -> Unit
 ) {
-    // 저장소의 젯슨 상태 구독
-    val selectedJetson by viewModel.selectedJetson.collectAsState()
+    val registeredList by viewModel.registeredJetsons.collectAsState()
+    val discoveredList by viewModel.discoveredJetsons.collectAsState()
+    val isScanning by viewModel.isScanning.collectAsState()
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("DS-Safer 관리자 대시보드", style = MaterialTheme.typography.headlineMedium)
+    Scaffold(
+        topBar = {
+            TopAppBar(title = { Text("기기 연결") },
+                actions = {
+                TextButton(onClick = onLogoutClick) {
+                    Text("로그아웃", color = Color.Red)
+                }
+            })
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+        ) {
+            // ==========================================
+            // Section 1: 등록된 기기 (내 기기)
+            // ==========================================
+            item {
+                Text(
+                    text = "등록된 기기",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // 1. Jetson 관리 카드 (상태 반영)
-        DashboardCard(
-            title = "Jetson 등록",
-            description = if (selectedJetson != null) {
-                "연결됨: ${selectedJetson?.name}\n(${selectedJetson?.ipAddress})"
+            if (registeredList.isEmpty()) {
+                item {
+                    Text(
+                        "등록된 기기가 없습니다.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                }
             } else {
-                "연결된 기기 없음 (클릭하여 탐색)"
-            },
-            onClick = onNavigateToJetson,
-            isRegistered = selectedJetson != null
-        )
+                items(registeredList) { device ->
+                    JetsonDeviceItem(
+                        device = device,
+                        onClick = { onNavigateToDetail(device) } // ★ 이미 등록된 기기: 클릭 시 상세(리모컨) 화면으로 이동
+                    )
+                }
+            }
 
-        // 2. 센서 관리 카드
-        DashboardCard(title = "센서 등록", description = "대기 중인 센서 목록 확인", onClick = onNavigateToSensor)
+            item { HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp)) }
 
-        // 3. CCTV 관리 카드
-        DashboardCard(title = "CCTV 등록", description = "카메라 정보 입력 및 등록", onClick = onNavigateToCctv)
+            // ==========================================
+            // Section 2: 연결 가능한 기기 (새로 찾은 기기)
+            // ==========================================
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "연결 가능한 기기",
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                    if (isScanning) {
+                        Spacer(Modifier.width(8.dp))
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    }
+                }
+            }
+
+            if (discoveredList.isEmpty()) {
+                item {
+                    Text("주변 기기를 찾는 중...", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                }
+            } else {
+                items(discoveredList) { device ->
+                    JetsonDeviceItem(
+                        device = device,
+                        onClick = { viewModel.registerDevice(device) } // ★ 새 기기: 타일 원클릭 시 통신 + 웹소켓 + 상단 이동 한방에 처리!
+                    )
+                }
+            }
+        }
     }
 }
 
+// ★ 수정됨: 불필요한 "등록" 버튼 파라미터를 싹 지우고, 진짜 블루투스 UI처럼 통일
 @Composable
-fun DashboardCard(
-    title: String,
-    description: String,
-    onClick: () -> Unit,
-    isRegistered: Boolean = false // [추가됨] 기본값은 false
+fun JetsonDeviceItem(
+    device: JetsonDevice,
+    onClick: () -> Unit
 ) {
-    // 등록 여부에 따라 카드의 배경색을 다르게 설정 (시각적 피드백)
-    val cardColor = if (isRegistered) {
-        MaterialTheme.colorScheme.primaryContainer // 등록되면 강조된 색상
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant // 등록 전엔 차분한 색상
-    }
-
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = cardColor), // 배경색 적용
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            .padding(vertical = 4.dp)
+            .clickable { onClick() }, // 타일 전체 터치 영역화
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, style = MaterialTheme.typography.titleLarge)
+                Text(text = device.name, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (isRegistered) Color.Unspecified else Color.Gray
+                    text = "IP: ${device.ipAddress} | Port: ${device.port}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
                 )
             }
-
-            // 등록된 상태라면 체크 아이콘 표시 (선택 사항)
-            if (isRegistered) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Registered",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
+            // 기기 항목 우측엔 항상 꺾쇠 화살표만 깔끔하게 표시
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowRight,
+                contentDescription = "이동/연결",
+                tint = Color.Gray
+            )
         }
     }
 }

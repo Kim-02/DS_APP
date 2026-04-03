@@ -26,16 +26,6 @@ data class CameraCreate(
     @SerializedName("camera_pw") val cameraPw: String
 )
 
-// ==========================================
-// 4. 위험 정보 알림용 (Hazard Alert)
-// ==========================================
-data class HazardAlert(
-    @SerializedName("sen_id") val senId: Int,
-    @SerializedName("jetson_id") val jetsonId: Int,
-    @SerializedName("risk_level") val riskLevel: String,
-    @SerializedName("detail") val detail: String
-)
-
 // API 응답 전체를 감싸는 껍데기 클래스
 data class DiscoveredSensorsResponse(
     @SerializedName("jetson_id") val jetsonId: String,
@@ -76,4 +66,16 @@ data class SensorRegisterRequest(
 data class SimpleResponse(
     @SerializedName("status") val status: String,
     @SerializedName("message") val message: String
+)
+
+// 작업자 로그인 응답용
+data class WorkerNameResponse(
+    @SerializedName("status") val status: String,
+    @SerializedName("worker_name") val worker_name: String
+)
+
+// 조치사항
+data class EventMeasuresReq(
+    @SerializedName("event_id") val eventId: Int,
+    @SerializedName("measures") val measures: String
 )

@@ -10,13 +10,15 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.ds_safer.data.repository.JetsonRepository
+import com.example.ds_safer.data.websocket.WebSocketManager // 🌟 웹소켓 매니저 임포트 추가!
 import com.example.ds_safer.ui.screens.detail.JetsonDetailScreen
 import com.example.ds_safer.ui.screens.discovery.DiscoveryViewModel
 import com.example.ds_safer.ui.screens.main.MainDashboardScreen
+import com.example.ds_safer.ui.screens.report.EventReportScreen
 import com.example.ds_safer.ui.screens.sensor.SensorRegistrationScreen
 import com.example.ds_safer.ui.screens.sensor.SensorRegistrationViewModel
 
-// 1️⃣ Screen 라우트 (완벽함!)
+// 1️⃣ Screen 라우트
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Main : Screen("main")
@@ -29,6 +31,10 @@ sealed class Screen(val route: String) {
     // 등록 화면 라우트
     object SensorRegistration : Screen("sensor_register")
     object CctvRegistration : Screen("cctv_register")
+
+    object EventReport : Screen("event_report/{eventId}") {
+        fun createRoute(eventId: Int) = "event_report/$eventId"
+    }
 }
 
 @Composable
@@ -59,7 +65,7 @@ fun NavGraph(
             )
         }
 
-        // ==========================================
+// ==========================================
         // 1. 메인 대시보드 화면
         // ==========================================
         composable(Screen.Main.route) {
@@ -70,11 +76,15 @@ fun NavGraph(
                     JetsonRepository.selectJetson(selectedDevice)
                     navController.navigate(Screen.JetsonDetail.route)
                 },
+                // 🌟 이 부분을 추가하세요!
+                onNavigateToReport = { eventId ->
+                    navController.navigate(Screen.EventReport.createRoute(eventId))
+                },
                 onLogoutClick = {
-                    authViewModel.logout()        // 1. 기기 저장소 초기화
-                    JetsonRepository.clear()      // 2. 선택된 젯슨 정보(RAM) 초기화
+                    authViewModel.logout()
+                    JetsonRepository.clear()
+                    WebSocketManager.disconnect()
 
-                    // 3. 메인 화면의 백스택(기록)을 싹 날리면서 로그인 화면으로 이동
                     navController.navigate(Screen.Login.route) {
                         popUpTo(Screen.Main.route) { inclusive = true }
                     }
@@ -94,8 +104,6 @@ fun NavGraph(
                         JetsonRepository.clear()
                         navController.popBackStack(Screen.Main.route, inclusive = false)
                     },
-                    // ★ 수정: Register가 아니라 List 화면으로 이동하게 변경!
-                    // (주의: JetsonDetailScreen.kt 파일 내부에서도 매개변수 이름을 onNavigateToSensorList 등으로 맞춰주는 게 좋아)
                     onNavigateToSensorRegister = {
                         navController.navigate(Screen.SensorList.route)
                     },
@@ -110,7 +118,7 @@ fun NavGraph(
         }
 
         // ==========================================
-        // 3-1. 센서 목록(관리) 화면 (★ 신규 추가!)
+        // 3-1. 센서 목록(관리) 화면
         // ==========================================
         composable(Screen.SensorList.route) {
             val sensorListViewModel: com.example.ds_safer.ui.screens.sensor.SensorListViewModel = viewModel()
@@ -136,7 +144,7 @@ fun NavGraph(
         }
 
         // ==========================================
-        // 4-1. CCTV 목록(관리) 화면 (★ 신규 추가!)
+        // 4-1. CCTV 목록(관리) 화면
         // ==========================================
         composable(Screen.CctvList.route) {
             val cctvListViewModel: com.example.ds_safer.ui.screens.cctv.CctvListViewModel = viewModel()
@@ -157,9 +165,21 @@ fun NavGraph(
             com.example.ds_safer.ui.screens.cctv.CctvRegistrationScreen(
                 viewModel = cctvViewModel,
                 onSuccess = {
-                    // 등록 성공하면 이전 화면(CCTV 목록 화면)으로 돌아가기
                     navController.popBackStack()
                 }
+            )
+        }
+
+        composable(Screen.EventReport.route) { backStackEntry ->
+            // 전달받은 eventId 꺼내기
+            val eventIdString = backStackEntry.arguments?.getString("eventId") ?: "0"
+            val eventId = eventIdString.toIntOrNull() ?: 0
+
+            EventReportScreen(
+                eventId = eventId,
+                authViewModel = authViewModel,
+                onBackClick = { navController.popBackStack() },
+                onSubmitSuccess = { navController.popBackStack() } // 제출 성공하면 뒤로가기
             )
         }
     }

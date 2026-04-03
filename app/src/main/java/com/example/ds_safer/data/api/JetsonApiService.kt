@@ -7,6 +7,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 
 data class JetsonRegisterRequest(
@@ -58,4 +59,14 @@ interface JetsonApiService {
     // 🆕 2. 등록된 센서 목록 긁어오기
     @GET("api/sensors")
     suspend fun getRegisteredSensors(): SensorListResponse
+
+    @GET("api/worker")
+    suspend fun getWorkerName(
+        @Query("worker_id") workerId: String
+    ): Response<WorkerNameResponse>
+
+    @POST("api/event/measures")
+    suspend fun postEventMeasures(
+        @Body request: EventMeasuresReq
+    ): Response<SimpleResponse>
 }

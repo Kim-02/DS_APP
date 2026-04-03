@@ -1,5 +1,6 @@
 package com.example.ds_safer.data.api
 
+import com.example.ds_safer.ui.screens.main.JetsonDeviceItem
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -22,5 +23,15 @@ object RetrofitClient {
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(JetsonApiService::class.java)
+    }
+
+    fun createWorkerService(baseUrl: String): JetsonApiService {
+        val finalizedUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
+        return Retrofit.Builder()
+            .baseUrl(finalizedUrl)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(JetsonApiService::class.java) // 🌟 문제의 { } 이것만 딱 뺐습니다!
     }
 }

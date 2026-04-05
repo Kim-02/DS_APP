@@ -1,29 +1,36 @@
 package com.example.ds_safer.ui.screens.detail
 
+import android.content.Intent // Intent 임포트 추가!
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info // 아이콘 임포트 추가
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext // LocalContext 임포트 추가!
 import androidx.compose.ui.unit.dp
 import com.example.ds_safer.domain.model.JetsonDevice
+import com.example.ds_safer.ui.screens.monitor.MonitoringActivity // 아까 만든 화면 임포트!
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun JetsonDetailScreen(
     device: JetsonDevice,
-    onDisconnectClick: () -> Unit,             // 1. 연결 해제 누를 때
-    onNavigateToSensorRegister: () -> Unit,    // 2. 센서 등록 누를 때
-    onNavigateToCctvRegister: () -> Unit,      // 3. CCTV 등록 누를 때
-    onBackClick: () -> Unit                    // 뒤로 가기
+    onDisconnectClick: () -> Unit,
+    onNavigateToSensorRegister: () -> Unit,
+    onNavigateToCctvRegister: () -> Unit,
+    onBackClick: () -> Unit
 ) {
+    // 🌟 Compose 화면에서 Activity를 띄우기 위해 Context를 가져옵니다.
+    val context = LocalContext.current
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -70,11 +77,26 @@ fun JetsonDetailScreen(
                 onClick = onNavigateToCctvRegister
             )
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 👇 3. 새로 추가하는 현황 모니터링 버튼! 👇
+            MenuButton(
+                icon = Icons.Default.Info, // 적당한 아이콘 (Info)
+                text = "실시간 현황 모니터링",
+                onClick = {
+                    // Compose 환경에서 기존 방식의 Activity 호출하기
+                    val intent = Intent(context, MonitoringActivity::class.java)
+                    // 파라미터로 받은 device 객체에서 진짜 IP 주소를 꺼내서 넘겨줍니다!
+                    intent.putExtra("JETSON_IP", device.ipAddress)
+                    context.startActivity(intent)
+                }
+            )
+
             Spacer(modifier = Modifier.height(32.dp))
             Divider()
             Spacer(modifier = Modifier.height(32.dp))
 
-            // 3. 젯슨 연결 해제 버튼 (위험하니까 빨간색 톤으로)
+            // 젯슨 연결 해제 버튼 (위험하니까 빨간색 톤으로)
             Button(
                 onClick = onDisconnectClick,
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
@@ -89,7 +111,7 @@ fun JetsonDetailScreen(
     }
 }
 
-// 메뉴 버튼용 공통 컴포저블
+// 메뉴 버튼용 공통 컴포저블 (이 부분은 수정 없음!)
 @Composable
 fun MenuButton(icon: ImageVector, text: String, onClick: () -> Unit) {
     Button(

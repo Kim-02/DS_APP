@@ -35,7 +35,7 @@ fun CctvRegistrationScreen(
         OutlinedTextField(
             value = viewModel.ipAddr,
             onValueChange = {viewModel.ipAddr = it},
-            label = {Text("윤정아")},
+            label = {Text("CAM IP")},
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(

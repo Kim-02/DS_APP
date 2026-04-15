@@ -33,7 +33,7 @@ class SensorRegistrationViewModel : ViewModel() {
                 val response = service.getDiscoverSensors()
 
                 // 2. 껍데기 안에서 실제 센서 리스트(discoveredSensors)만 꺼내서 뷰모델 상태 업데이트
-                _readySensors.value = response.discoveredSensors
+                _readySensors.value = response.data
 
             } catch (e: Exception) {
                 // 에러 발생 시 일단 빈 리스트 유지
@@ -57,7 +57,7 @@ class SensorRegistrationViewModel : ViewModel() {
 
                 // 1. 서버에 보낼 JSON 껍데기 조립 (파이썬 서버가 기대하는 "Jetson-1" 문자열 형태로 가공)
                 val requestBody = SensorRegisterRequest(
-                    jetsonId = "Jetson-$actualJetsonId",
+                    jetsonId = "jetson-$actualJetsonId",
                     selectedSensors = selectedList // 선택된 리스트 통째로 삽입!
                 )
 

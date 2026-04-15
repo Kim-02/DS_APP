@@ -6,9 +6,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
-import retrofit2.http.Path
 import retrofit2.http.Query
-
 
 data class JetsonRegisterRequest(
     val dept_id: Int,
@@ -24,10 +22,11 @@ data class JetsonRegisterResponse(
 
 interface JetsonApiService {
 
-    // 1. 젯슨 헬스 체크 (단순 생존 확인용)
+    // 1. 젯슨 헬스 체크
     @GET("/")
     suspend fun checkHealth(): Response<ResponseBody>
 
+    // 서버에 실제로 없으면 제거하거나 서버 쪽에 추가 필요
     @GET("api/jetson")
     suspend fun getJetsonInfo(): JetsonInfoResponse
 
@@ -36,29 +35,35 @@ interface JetsonApiService {
         @Body request: JetsonRegisterRequest
     ): Response<JetsonRegisterResponse>
 
-    // 광고된 센서 띄우기
+    // 발견된 센서 목록
     @GET("api/sensors/discovered")
-    suspend fun getDiscoverSensors(): DiscoveredSensorsResponse
+    suspend fun getDiscoverSensors(): SensorDiscoveryResponse
 
-    // 4. 센서 등록 요청
+    // 등록된 센서 목록
+    @GET("api/sensors")
+    suspend fun getRegisteredSensors(): SensorListResponse
+
+    // 센서 등록
     @POST("api/sensors/register")
     suspend fun registerSensor(
         @Body request: SensorRegisterRequest
     ): SimpleResponse
 
-    // 5. CCTV 카메라 등록 요청
+    // 센서 등록 해제
+    @POST("api/sensors/unregister")
+    suspend fun unregisterSensor(
+        @Body request: SensorUnregisterRequest
+    ): SimpleResponse
+
+    // CCTV 카메라 등록
     @POST("api/cameras/register")
     suspend fun registerCctv(
-        @Body request: CameraCreate
+        @Body request: CctvRegisterRequest
     ): CameraRegisterResponse
 
-    // 🆕 1. 등록된 CCTV 목록 긁어오기
-    @GET("api/cameras") // URL은 서버 명세 확인!
+    // 등록된 CCTV 목록
+    @GET("api/cameras")
     suspend fun getRegisteredCameras(): CctvListResponse
-
-    // 🆕 2. 등록된 센서 목록 긁어오기
-    @GET("api/sensors")
-    suspend fun getRegisteredSensors(): SensorListResponse
 
     @GET("api/worker")
     suspend fun getWorkerName(

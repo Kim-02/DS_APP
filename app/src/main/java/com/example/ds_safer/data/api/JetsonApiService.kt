@@ -58,7 +58,7 @@ interface JetsonApiService {
     // CCTV 카메라 등록
     @POST("api/cameras/register")
     suspend fun registerCctv(
-        @Body request: CctvRegisterRequest
+        @Body request: CameraCreate
     ): CameraRegisterResponse
 
     // 등록된 CCTV 목록

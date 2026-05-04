@@ -64,7 +64,7 @@ data class RegisteredSensor(
     @SerializedName("mqtt_topic") val mqttTopic: String? = null,
     @SerializedName("mdns_hostname") val mdnsHostname: String? = null,
     @SerializedName("ip_addr") val ipAddr: String? = null,
-    @SerializedName("is_online") val isOnline: Boolean? = null,
+    @SerializedName("is_online") val isOnline: Int? = null,
     @SerializedName("last_seen_at") val lastSeenAt: String? = null,
     @SerializedName("registered_at") val registeredAt: String? = null,
     @SerializedName("register_date") val registerDate: String? = null,

@@ -62,7 +62,7 @@ class AuthViewModel(private val dataStore: AuthDataStore) : ViewModel() {
             // 1. 통신 성공 (200 OK) + 상태가 success 일 때
             if (response.isSuccessful && response.body()?.status == "success") {
                 // 🌟 서버가 준 진짜 이름을 꺼내서 적용! (null이면 "작업자"로 세팅)
-                _workerName.value = response.body()?.worker_name ?: "작업자"
+                _workerName.value = response.body()?.workerName ?: "작업자"
             }
             // 2. 서버에서 404 (해당 사번 없음) 에러를 보냈을 때
             else if (response.code() == 404) {

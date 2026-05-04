@@ -1,5 +1,6 @@
 package com.example.ds_safer.ui.screens.sensor
 
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,6 +27,7 @@ fun SensorListScreen(
     var targetSensorId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
+        Log.d("SensorListScreen", "Screen entered")
         viewModel.fetchSensors()
     }
 
@@ -131,9 +133,9 @@ fun SensorListScreen(
                                 sensor.isOnline?.let { online ->
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = if (online) "상태: 온라인" else "상태: 오프라인",
+                                        text = if (online == 1) "상태: 온라인" else "상태: 오프라인",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = if (online) Color(0xFF2E7D32) else Color.Gray
+                                        color = if (online == 1) Color(0xFF2E7D32) else Color.Gray
                                     )
                                 }
 

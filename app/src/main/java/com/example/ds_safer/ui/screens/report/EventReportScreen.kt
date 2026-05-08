@@ -100,7 +100,7 @@ fun EventReportScreen(
                             val request = EventMeasuresReq(eventId = eventId, measures = measures)
 
                             // 🌟 여기서 서비스 객체 생성 후 호출!
-                            val service = RetrofitClient.createWorkerService("http://192.168.0.64:8000/")
+                            val service = RetrofitClient.createWorkerService("http://192.168.0.66:8080/")
                             val response = service.postEventMeasures(request)
 
                             if (response.isSuccessful && response.body()?.status == "success") {

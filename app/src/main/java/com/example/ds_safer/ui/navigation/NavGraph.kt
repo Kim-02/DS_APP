@@ -10,9 +10,11 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.ds_safer.data.repository.JetsonRepository
-import com.example.ds_safer.data.websocket.WebSocketManager // 🌟 웹소켓 매니저 임포트 추가!
+import com.example.ds_safer.data.websocket.WebSocketManager
 import com.example.ds_safer.ui.screens.detail.JetsonDetailScreen
 import com.example.ds_safer.ui.screens.discovery.DiscoveryViewModel
+import com.example.ds_safer.ui.screens.floormap.FloorMapScreen
+import com.example.ds_safer.ui.screens.floormap.FloorMapViewModel
 import com.example.ds_safer.ui.screens.main.MainDashboardScreen
 import com.example.ds_safer.ui.screens.report.EventReportScreen
 import com.example.ds_safer.ui.screens.sensor.SensorRegistrationScreen
@@ -31,6 +33,9 @@ sealed class Screen(val route: String) {
     // 등록 화면 라우트
     object SensorRegistration : Screen("sensor_register")
     object CctvRegistration : Screen("cctv_register")
+
+    // 평면도 화면 라우트 추가
+    object FloorMap : Screen("floor_map")
 
     object EventReport : Screen("event_report/{eventId}") {
         fun createRoute(eventId: Int) = "event_report/$eventId"
@@ -65,7 +70,7 @@ fun NavGraph(
             )
         }
 
-// ==========================================
+        // ==========================================
         // 1. 메인 대시보드 화면
         // ==========================================
         composable(Screen.Main.route) {
@@ -76,7 +81,6 @@ fun NavGraph(
                     JetsonRepository.selectJetson(selectedDevice)
                     navController.navigate(Screen.JetsonDetail.route)
                 },
-                // 🌟 이 부분을 추가하세요!
                 onNavigateToReport = { eventId ->
                     navController.navigate(Screen.EventReport.createRoute(eventId))
                 },
@@ -93,13 +97,14 @@ fun NavGraph(
         }
 
         // ==========================================
-        // 2. 젯슨 상세 화면 (리모컨)
+        // 2. 젯슨 상세 화면
         // ==========================================
         composable(Screen.JetsonDetail.route) {
-            val currentDevice = JetsonRepository.selectedJetson.value
+            val currentDevice by JetsonRepository.selectedJetson.collectAsState()
+
             if (currentDevice != null) {
                 JetsonDetailScreen(
-                    device = currentDevice,
+                    device = currentDevice!!,
                     onDisconnectClick = {
                         JetsonRepository.clear()
                         navController.popBackStack(Screen.Main.route, inclusive = false)
@@ -110,11 +115,26 @@ fun NavGraph(
                     onNavigateToCctvRegister = {
                         navController.navigate(Screen.CctvList.route)
                     },
+                    onNavigateToFloorMap = {
+                        navController.navigate(Screen.FloorMap.route)
+                    },
                     onBackClick = {
                         navController.popBackStack()
                     }
                 )
             }
+        }
+
+        // ==========================================
+        // 2-1. 평면도 화면 추가
+        // ==========================================
+        composable(Screen.FloorMap.route) {
+            val floorMapViewModel: FloorMapViewModel = viewModel()
+
+            FloorMapScreen(
+                viewModel = floorMapViewModel,
+                onBackClick = { navController.popBackStack() }
+            )
         }
 
         // ==========================================
@@ -171,7 +191,6 @@ fun NavGraph(
         }
 
         composable(Screen.EventReport.route) { backStackEntry ->
-            // 전달받은 eventId 꺼내기
             val eventIdString = backStackEntry.arguments?.getString("eventId") ?: "0"
             val eventId = eventIdString.toIntOrNull() ?: 0
 
@@ -179,7 +198,7 @@ fun NavGraph(
                 eventId = eventId,
                 authViewModel = authViewModel,
                 onBackClick = { navController.popBackStack() },
-                onSubmitSuccess = { navController.popBackStack() } // 제출 성공하면 뒤로가기
+                onSubmitSuccess = { navController.popBackStack() }
             )
         }
     }

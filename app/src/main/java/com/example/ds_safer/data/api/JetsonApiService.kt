@@ -6,6 +6,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 data class JetsonRegisterRequest(
@@ -74,4 +75,56 @@ interface JetsonApiService {
     suspend fun postEventMeasures(
         @Body request: EventMeasuresReq
     ): Response<SimpleResponse>
+
+    @GET("api/maps/{jetsonId}")
+    suspend fun getFloorMap(
+        @Path("jetsonId") jetsonId: Int
+    ): FloorMapResponse
+
+    @GET("api/maps/{mapId}/sensors")
+    suspend fun getMapSensorPositions(
+        @Path("mapId") mapId: Int
+    ): SensorPositionListResponse
+
+    @GET("api/maps/{jetsonId}/available-temp-sensors")
+    suspend fun getAvailableTempSensorsForMap(
+        @Path("jetsonId") jetsonId: Int
+    ): SensorListResponse
+
+    @POST("api/maps/sensors/position")
+    suspend fun saveSensorPosition(
+        @Body request: SaveSensorPositionRequest
+    ): SimpleResponse
+
+    @GET("api/maps/sensors/{sensorId}/latest")
+    suspend fun getLatestTempSensorValue(
+        @Path("sensorId") sensorId: String
+    ): LatestTempHumidityResponse
+
+    // 실제 MariaDB worker 목록 조회
+    @GET("api/v1/workers/db")
+    suspend fun getDbWorkers(
+        @Query("is_manager") isManager: Int = 0
+    ): List<WorkerDbResponse>
+
+    // 사번으로 실제 MariaDB worker 조회
+    @GET("api/v1/workers/db/{deptId}")
+    suspend fun getDbWorker(
+        @Path("deptId") deptId: Int
+    ): WorkerDbResponse
+
+    // mDNS로 발견된 heart_band 워치를 작업자에게 등록 및 매핑
+    @POST("api/v1/workers/{deptId}/assign-heart-band")
+    suspend fun assignHeartBandToWorker(
+        @Path("deptId") deptId: Int,
+        @Body request: AssignHeartBandRequest
+    ): AssignHeartBandResponse
+
+    // 작업자와 센서 매핑 해제
+    @POST("api/v1/workers/{deptId}/unassign-sensor")
+    suspend fun unassignWorkerSensor(
+        @Path("deptId") deptId: Int
+    ): UnassignSensorResponse
+
 }
+

@@ -110,3 +110,107 @@ data class EventMeasuresReq(
     @SerializedName("event_id") val eventId: Int,
     @SerializedName("measures") val measures: String
 )
+
+
+data class FloorMapResponse(
+    @SerializedName("status") val status: String,
+    @SerializedName("data") val data: FloorMapInfo
+)
+
+data class FloorMapInfo(
+    @SerializedName("map_id") val mapId: Int,
+    @SerializedName("jetson_id") val jetsonId: Int,
+    @SerializedName("map_name") val mapName: String,
+    @SerializedName("image_base64") val imageBase64: String,
+    @SerializedName("image_mime_type") val imageMimeType: String?,
+    @SerializedName("image_width") val imageWidth: Int?,
+    @SerializedName("image_height") val imageHeight: Int?
+)
+
+data class SensorPositionListResponse(
+    @SerializedName("status") val status: String,
+    @SerializedName("data") val data: List<SensorMapPosition>
+)
+
+data class SensorMapPosition(
+    @SerializedName("position_id") val positionId: Int?,
+    @SerializedName("map_id") val mapId: Int,
+    @SerializedName("sensor_id") val sensorId: String,
+    @SerializedName("x_ratio") val xRatio: Float,
+    @SerializedName("y_ratio") val yRatio: Float,
+    @SerializedName("sen_name") val senName: String?,
+    @SerializedName("sensor_type") val sensorType: String?,
+    @SerializedName("sen_locate") val senLocate: String?,
+    @SerializedName("model") val model: String?,
+    @SerializedName("is_online") val isOnline: Int?
+)
+
+data class SaveSensorPositionRequest(
+    @SerializedName("map_id") val mapId: Int,
+    @SerializedName("sensor_id") val sensorId: String,
+    @SerializedName("x_ratio") val xRatio: Float,
+    @SerializedName("y_ratio") val yRatio: Float
+)
+
+data class LatestTempHumidityResponse(
+    @SerializedName("status") val status: String,
+    @SerializedName("data") val data: LatestTempHumidityData?
+)
+
+data class LatestTempHumidityData(
+    @SerializedName("temp") val temp: Float?,
+    @SerializedName("humid") val humid: Float?,
+    @SerializedName("time") val time: String?
+)
+
+
+// ==========================================
+// 실제 MariaDB worker 테이블 기준 작업자 응답
+// worker:
+// - dept_id: 사번
+// - name: 이름
+// - is_manager: 1 관리자, 0 작업자
+// - sen_id: 착용 센서 ID
+// ==========================================
+data class WorkerDbResponse(
+    @SerializedName("dept_id") val deptId: Int,
+    @SerializedName("name") val name: String,
+    @SerializedName("is_manager") val isManager: Int,
+    @SerializedName("sen_id") val senId: Int? = null,
+    @SerializedName("sensor_id") val sensorId: String? = null,
+    @SerializedName("sensor_type") val sensorType: String? = null,
+    @SerializedName("sensor_name") val sensorName: String? = null
+)
+
+// ==========================================
+// 워치-작업자 매핑 요청
+// POST /workers/{dept_id}/assign-heart-band
+// ==========================================
+data class AssignHeartBandRequest(
+    @SerializedName("sensor_id") val sensorId: String,
+    @SerializedName("jetson_id") val jetsonId: Int? = null,
+    @SerializedName("interval_ms") val intervalMs: Int = 5000
+)
+
+data class AssignHeartBandResponse(
+    @SerializedName("success") val success: Boolean,
+    @SerializedName("message") val message: String,
+    @SerializedName("data") val data: AssignedHeartBandData? = null
+)
+
+data class AssignedHeartBandData(
+    @SerializedName("sen_id") val senId: Int,
+    @SerializedName("sensor_id") val sensorId: String,
+    @SerializedName("sensor_type") val sensorType: String,
+    @SerializedName("dept_id") val deptId: Int,
+    @SerializedName("worker_name") val workerName: String,
+    @SerializedName("mqtt_base") val mqttBase: String? = null,
+    @SerializedName("mqtt_topic") val mqttTopic: String? = null
+)
+
+data class UnassignSensorResponse(
+    @SerializedName("success") val success: Boolean,
+    @SerializedName("message") val message: String
+)
+
+// cctv 추가

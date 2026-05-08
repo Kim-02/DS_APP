@@ -36,7 +36,7 @@ class MonitoringActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // 이전 화면에서 넘겨준 IP 받기
-        val jetsonIp = intent.getStringExtra("JETSON_IP") ?: "192.168.0.64"
+        val jetsonIp = intent.getStringExtra("JETSON_IP") ?: "192.168.0.66"
 
         // 웹소켓 연결 시작
         startVitalWebSocket(jetsonIp)

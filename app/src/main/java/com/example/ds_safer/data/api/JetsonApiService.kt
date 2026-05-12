@@ -4,8 +4,10 @@ import com.example.ds_safer.domain.model.*
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -56,15 +58,79 @@ interface JetsonApiService {
         @Body request: SensorUnregisterRequest
     ): SimpleResponse
 
-    // CCTV 카메라 등록
-    @POST("api/cameras/register")
-    suspend fun registerCctv(
-        @Body request: CameraCreate
-    ): CameraRegisterResponse
+    // ==========================================
+    // CCTV 모듈 API
+    // 기준 Python router:
+    // prefix = /cctv/cameras
+    // ==========================================
 
-    // 등록된 CCTV 목록
-    @GET("api/cameras")
-    suspend fun getRegisteredCameras(): CctvListResponse
+    // CCTV 목록 조회
+    @GET("/api/v1/cctv/cameras/")
+    suspend fun getCameras(
+        @Query("process_id") processId: Int? = null
+    ): List<CameraOutResponse>
+
+    // CCTV 직접 생성
+    // 이미 RTSP URL을 알고 있을 때 사용
+    @POST("cctv/cameras/")
+    suspend fun createCamera(
+        @Body request: CameraCreateRequest
+    ): CameraOutResponse
+
+    // CCTV 앱용 등록
+    // 앱에서 IP/PW 입력
+    // camera_username은 AppCameraRegisterRequest에서 "admin" 기본값 사용
+    // 서버에서 RTSP URL 자동 생성
+    @POST("/api/v1/cctv/cameras/register")
+    suspend fun registerCctv(
+        @Body request: AppCameraRegisterRequest
+    ): CameraOutResponse
+
+    // CCTV 상세 조회
+    // Python router에서는 sensor_id 기준으로 get_camera 호출
+    @GET("/api/v1/cctv/cameras/{sensorId}")
+    suspend fun getCamera(
+        @Path("sensorId") sensorId: Int
+    ): CameraOutResponse
+
+    // CCTV 수정
+    @PUT("/api/v1/cctv/cameras/{sensorId}")
+    suspend fun updateCamera(
+        @Path("sensorId") sensorId: Int,
+        @Body request: CameraUpdateRequest
+    ): CameraOutResponse
+
+    // CCTV 삭제
+    @DELETE("/api/v1/cctv/cameras/{sensorId}")
+    suspend fun deleteCamera(
+        @Path("sensorId") sensorId: Int
+    ): Response<Unit>
+
+    // Fire pipeline 상태 조회
+    // 주의:
+    // 현재 Python router는 path 이름을 camera_id로 쓰고 있으나,
+    // start/stop 내부에서는 service.get_camera(db, camera_id)를 호출합니다.
+    // 따라서 앱에서는 일단 CameraOutResponse.id, 즉 sensor id 기준으로 넘기는 구조로 맞춥니다.
+    @GET("/api/v1/cctv/cameras/{sensorId}/fire-pipeline")
+    suspend fun getFirePipelineStatus(
+        @Path("sensorId") sensorId: Int
+    ): FirePipelineStatusResponse
+
+    // Fire pipeline 시작
+    @POST("/api/v1/cctv/cameras/{sensorId}/fire-pipeline/start")
+    suspend fun startFirePipeline(
+        @Path("sensorId") sensorId: Int
+    ): SimplePipelineResponse
+
+    // Fire pipeline 중단
+    @POST("/api/v1/cctv/cameras/{sensorId}/fire-pipeline/stop")
+    suspend fun stopFirePipeline(
+        @Path("sensorId") sensorId: Int
+    ): SimplePipelineResponse
+
+    // ==========================================
+    // 작업자 / 이벤트 / 지도 / 센서 API
+    // ==========================================
 
     @GET("api/worker")
     suspend fun getWorkerName(
@@ -86,9 +152,10 @@ interface JetsonApiService {
         @Path("mapId") mapId: Int
     ): SensorPositionListResponse
 
-    @GET("api/maps/{jetsonId}/available-temp-sensors")
+    @GET("api/maps/{jetsonId}/available-sensors")
     suspend fun getAvailableTempSensorsForMap(
-        @Path("jetsonId") jetsonId: Int
+        @Path("jetsonId") jetsonId: Int,
+        @Query("map_id") mapId: Int? = null
     ): SensorListResponse
 
     @POST("api/maps/sensors/position")
@@ -125,6 +192,4 @@ interface JetsonApiService {
     suspend fun unassignWorkerSensor(
         @Path("deptId") deptId: Int
     ): UnassignSensorResponse
-
 }
-

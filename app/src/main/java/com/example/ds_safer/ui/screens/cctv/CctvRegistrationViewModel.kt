@@ -7,62 +7,85 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ds_safer.data.api.RetrofitClient
 import com.example.ds_safer.data.repository.JetsonRepository
-import com.example.ds_safer.domain.model.CameraCreate // 바뀐 규격의 모델 객체
+import com.example.ds_safer.domain.model.AppCameraRegisterRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class CctvRegistrationViewModel : ViewModel() {
 
-    // --- UI 입력 상태 변수들 ---
-
-    // 💡 참고: 서버가 다 알아서 하니까 name, ipAddress, port는 이제 API 전송용으로는 필요 없어!
-    // 만약 앱 화면(UI)에서도 입력받을 필요가 없어졌다면 과감하게 지워버려도 돼.
-    var name by mutableStateOf("")
-
-    var ipAddr by mutableStateOf("")
-    var userId by mutableStateOf("")
-    var userPw by mutableStateOf("")
+    var ipAddress by mutableStateOf("")
+    var cameraPassword by mutableStateOf("")
 
     private val _uiState = MutableStateFlow<CctvUiState>(CctvUiState.Idle)
     val uiState = _uiState.asStateFlow()
 
     fun registerCctv() {
-        val device = JetsonRepository.selectedJetson.value ?: return
+        val selectedJetson = JetsonRepository.selectedJetson.value
+
+        if (selectedJetson == null) {
+            _uiState.value = CctvUiState.Error("선택된 Jetson이 없습니다.")
+            return
+        }
+
+        val trimmedIp = ipAddress.trim()
+        val trimmedPassword = cameraPassword.trim()
+
+        if (trimmedIp.isBlank()) {
+            _uiState.value = CctvUiState.Error("CCTV IP 주소를 입력하세요.")
+            return
+        }
+
+        if (trimmedPassword.isBlank()) {
+            _uiState.value = CctvUiState.Error("CCTV 비밀번호를 입력하세요.")
+            return
+        }
 
         viewModelScope.launch {
             _uiState.value = CctvUiState.Loading
+
             try {
-                val baseUrl = "http://${device.ipAddress}:${device.port}/"
+                val baseUrl = "http://${selectedJetson.ipAddress}:${selectedJetson.port}/"
                 val service = RetrofitClient.createService(baseUrl)
 
-                val request = CameraCreate(
-                    ipAddress = ipAddr,
-                    cameraId = userId,
-                    cameraPw = userPw
+                val request = AppCameraRegisterRequest(
+                    ipAddress = trimmedIp,
+                    cameraUsername = DEFAULT_CAMERA_USERNAME,
+                    cameraPassword = trimmedPassword,
+                    name = "CCTV-$trimmedIp",
+                    processId = DEFAULT_PROCESS_ID,
+                    rtspPath = null
                 )
 
-                // API 쏘기
-                val response = service.registerCctv(request)
+                service.registerCctv(request)
 
-                // null 안전성 처리 및 성공 여부 판단
-                if (response.message.contains("성공", ignoreCase = true)) {
-                    _uiState.value = CctvUiState.Success
-                } else {
-                    // 성공이 아니면 에러 처리
-                    _uiState.value = CctvUiState.Error(response.message)
-                }
+                _uiState.value = CctvUiState.Success
             } catch (e: Exception) {
-                _uiState.value = CctvUiState.Error("연결 오류: ${e.message}")
-                e.printStackTrace() // 디버깅용 로그
+                e.printStackTrace()
+                _uiState.value = CctvUiState.Error(
+                    e.message ?: "CCTV 등록 중 오류가 발생했습니다."
+                )
             }
         }
+    }
+
+    companion object {
+        private const val DEFAULT_CAMERA_USERNAME = "admin"
+
+        /*
+         * 중요:
+         * 현재 Python CCTV 모듈의 AppCameraRegisterReq는 process_id를 필수로 요구합니다.
+         * 앱에서 공정 선택 기능이 아직 없다면 일단 기본값 1을 사용합니다.
+         *
+         * 나중에 process 목록/선택 API가 생기면 이 값을 선택된 process_id로 교체하세요.
+         */
+        private const val DEFAULT_PROCESS_ID = 1
     }
 }
 
 sealed class CctvUiState {
-    object Idle : CctvUiState()
-    object Loading : CctvUiState()
-    object Success : CctvUiState()
+    data object Idle : CctvUiState()
+    data object Loading : CctvUiState()
+    data object Success : CctvUiState()
     data class Error(val message: String) : CctvUiState()
 }

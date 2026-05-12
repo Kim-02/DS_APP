@@ -7,15 +7,6 @@ data class JetsonInfoResponse(
 )
 
 // ==========================================
-// 카메라 등록 요청
-// ==========================================
-data class CameraCreate(
-    @SerializedName("ip_address") val ipAddress: String,
-    @SerializedName("camera_id") val cameraId: String,
-    @SerializedName("camera_pw") val cameraPw: String
-)
-
-// ==========================================
 // 발견 센서 목록 응답
 // 서버:
 // {
@@ -39,10 +30,6 @@ data class DiscoveredSensor(
     @SerializedName("ip_addr") val ipAddr: String? = null,
     @SerializedName("is_online") val isOnline: Boolean? = null,
     @SerializedName("last_seen_at") val lastSeenAt: String? = null
-)
-
-data class CameraRegisterResponse(
-    @SerializedName("message") val message: String
 )
 
 // ==========================================
@@ -69,7 +56,11 @@ data class RegisteredSensor(
     @SerializedName("registered_at") val registeredAt: String? = null,
     @SerializedName("register_date") val registerDate: String? = null,
     @SerializedName("created_at") val createdAt: String? = null,
-    @SerializedName("updated_at") val updatedAt: String? = null
+    @SerializedName("updated_at") val updatedAt: String? = null,
+
+    @SerializedName("placed") val placed: Int? = null,
+    @SerializedName("x_ratio") val xRatio: Float? = null,
+    @SerializedName("y_ratio") val yRatio: Float? = null
 )
 
 // ==========================================
@@ -111,7 +102,9 @@ data class EventMeasuresReq(
     @SerializedName("measures") val measures: String
 )
 
-
+// ==========================================
+// 평면도 응답
+// ==========================================
 data class FloorMapResponse(
     @SerializedName("status") val status: String,
     @SerializedName("data") val data: FloorMapInfo
@@ -163,14 +156,8 @@ data class LatestTempHumidityData(
     @SerializedName("time") val time: String?
 )
 
-
 // ==========================================
 // 실제 MariaDB worker 테이블 기준 작업자 응답
-// worker:
-// - dept_id: 사번
-// - name: 이름
-// - is_manager: 1 관리자, 0 작업자
-// - sen_id: 착용 센서 ID
 // ==========================================
 data class WorkerDbResponse(
     @SerializedName("dept_id") val deptId: Int,
@@ -213,4 +200,70 @@ data class UnassignSensorResponse(
     @SerializedName("message") val message: String
 )
 
-// cctv 추가
+// ==========================================
+// CCTV 모듈 기준 모델
+// 기준 서버 모듈:
+// - schemas.py
+// - router.py
+// - service.py
+//
+// 사용 API:
+// POST /cctv/cameras/register
+// GET  /cctv/cameras/
+// POST /cctv/cameras/
+// GET  /cctv/cameras/{sensor_id}
+// PUT  /cctv/cameras/{sensor_id}
+// DELETE /cctv/cameras/{sensor_id}
+// ==========================================
+
+// 앱 전용 CCTV 등록 요청
+// 사용자는 IP/PW만 입력하고,
+// cameraUsername은 "admin" 기본값 사용
+// name은 앱에서 "CCTV-{IP}" 등으로 자동 생성
+data class AppCameraRegisterRequest(
+    @SerializedName("ip_address") val ipAddress: String,
+    @SerializedName("camera_username") val cameraUsername: String = "admin",
+    @SerializedName("camera_password") val cameraPassword: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("process_id") val processId: Int,
+    @SerializedName("rtsp_path") val rtspPath: String? = null
+)
+
+// RTSP URL을 직접 알고 있을 때 사용하는 생성 요청
+data class CameraCreateRequest(
+    @SerializedName("device_id") val deviceId: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("process_id") val processId: Int,
+    @SerializedName("rtsp_url") val rtspUrl: String
+)
+
+data class CameraUpdateRequest(
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("is_active") val isActive: Boolean? = null,
+    @SerializedName("rtsp_url") val rtspUrl: String? = null
+)
+
+data class CameraOutResponse(
+    @SerializedName("id") val id: Int,
+    @SerializedName("device_id") val deviceId: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("process_id") val processId: Int,
+    @SerializedName("is_active") val isActive: Boolean,
+    @SerializedName("registered_at") val registeredAt: String,
+    @SerializedName("camera") val camera: CameraDetailResponse?
+)
+
+data class CameraDetailResponse(
+    @SerializedName("rtsp_url") val rtspUrl: String
+)
+
+data class FirePipelineStatusResponse(
+    @SerializedName("camera_id") val cameraId: Int,
+    @SerializedName("running") val running: Boolean,
+    @SerializedName("latest_result") val latestResult: String?
+)
+
+data class SimplePipelineResponse(
+    @SerializedName("status") val status: String,
+    @SerializedName("camera_id") val cameraId: Int
+)

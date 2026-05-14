@@ -1,4 +1,3 @@
-
 package com.example.ds_safer.ui.screens.sensor
 
 import android.util.Log
@@ -13,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class SensorListViewModel : ViewModel() {
+
     private val _sensorList = MutableStateFlow<List<RegisteredSensor>>(emptyList())
     val sensorList = _sensorList.asStateFlow()
 
@@ -54,12 +54,20 @@ class SensorListViewModel : ViewModel() {
                 Log.d("SensorListVM", "service created")
 
                 val response = service.getRegisteredSensors()
+
                 Log.d("SensorListVM", "REGISTERED response.status = ${response.status}")
                 Log.d("SensorListVM", "REGISTERED response.data = ${response.data}")
                 Log.d("SensorListVM", "REGISTERED response size = ${response.data.size}")
 
                 if (response.status == "success") {
-                    _sensorList.value = response.data
+                    val filteredSensors = response.data.filterNot { sensor ->
+                        isCameraSensorType(sensor.sensorType)
+                    }
+
+                    _sensorList.value = filteredSensors
+
+                    Log.d("SensorListVM", "filtered sensor size = ${filteredSensors.size}")
+                    Log.d("SensorListVM", "camera/cctv excluded size = ${response.data.size - filteredSensors.size}")
                     Log.d("SensorListVM", "_sensorList updated = ${_sensorList.value}")
                 } else {
                     _sensorList.value = emptyList()
@@ -120,5 +128,22 @@ class SensorListViewModel : ViewModel() {
 
     fun clearErrorMessage() {
         _errorMessage.value = null
+    }
+
+    private fun isCameraSensorType(sensorType: String?): Boolean {
+        val type = sensorType
+            ?.trim()
+            ?.lowercase()
+            ?: return false
+
+        return type == "camera" ||
+                type == "cctv" ||
+                type == "ip_camera" ||
+                type == "ipcam" ||
+                type == "rtsp_camera" ||
+                type == "network_camera" ||
+                type.contains("camera") ||
+                type.contains("cctv") ||
+                type.contains("rtsp")
     }
 }

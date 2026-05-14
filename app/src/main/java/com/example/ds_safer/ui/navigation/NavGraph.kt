@@ -18,6 +18,7 @@ import com.example.ds_safer.ui.screens.floormap.FloorMapViewModel
 import com.example.ds_safer.ui.screens.jetson.JetsonSpaceRegisterScreen
 import com.example.ds_safer.ui.screens.jetson.JetsonSpaceRegisterViewModel
 import com.example.ds_safer.ui.screens.main.MainDashboardScreen
+import com.example.ds_safer.ui.screens.profile.ProfileScreen
 import com.example.ds_safer.ui.screens.report.EventReportScreen
 import com.example.ds_safer.ui.screens.sensor.SensorRegistrationScreen
 import com.example.ds_safer.ui.screens.sensor.SensorRegistrationViewModel
@@ -25,9 +26,10 @@ import com.example.ds_safer.ui.screens.sensor.SensorRegistrationViewModel
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Main : Screen("main")
+    object JetsonSpaceRegister : Screen("jetson_space_register")
     object JetsonDetail : Screen("detail")
 
-    object JetsonSpaceRegister : Screen("jetson_space_register")
+    object Profile : Screen("profile")
 
     object SensorList : Screen("sensor_list")
     object CctvList : Screen("cctv_list")
@@ -49,6 +51,7 @@ fun NavGraph(
     discoveryViewModel: DiscoveryViewModel
 ) {
     val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
+    val workerName by authViewModel.workerName.collectAsState()
 
     if (isLoggedIn == null) return
 
@@ -78,16 +81,15 @@ fun NavGraph(
         composable(Screen.Main.route) {
             MainDashboardScreen(
                 viewModel = discoveryViewModel,
-                authViewModel = authViewModel,
                 onNavigateToDetail = { selectedDevice ->
                     JetsonRepository.selectJetson(selectedDevice)
                     navController.navigate(Screen.JetsonDetail.route)
                 },
-                onNavigateToReport = { eventId ->
-                    navController.navigate(Screen.EventReport.createRoute(eventId))
-                },
                 onNavigateToJetsonSpaceRegister = {
                     navController.navigate(Screen.JetsonSpaceRegister.route)
+                },
+                onNavigateToReport = { eventId ->
+                    navController.navigate(Screen.EventReport.createRoute(eventId))
                 },
                 onLogoutClick = {
                     authViewModel.logout()
@@ -126,6 +128,7 @@ fun NavGraph(
             if (currentDevice != null) {
                 JetsonDetailScreen(
                     device = currentDevice!!,
+                    userName = workerName,
                     onDisconnectClick = {
                         JetsonRepository.clear()
                         discoveryViewModel.loadRegisteredJetsonsFromDiscoveredServers()
@@ -142,13 +145,47 @@ fun NavGraph(
                         navController.navigate(Screen.CctvList.route)
                     },
                     onNavigateToFloorMap = {
-                        navController.navigate(Screen.FloorMap.route)
+                        navController.navigate(Screen.FloorMap.route) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onNavigateToProfile = {
+                        navController.navigate(Screen.Profile.route) {
+                            launchSingleTop = true
+                        }
                     },
                     onBackClick = {
                         navController.popBackStack()
                     }
                 )
             }
+        }
+
+        composable(Screen.Profile.route) {
+            ProfileScreen(
+                userName = workerName,
+                onHomeClick = {
+                    navController.navigate(Screen.JetsonDetail.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onFloorMapClick = {
+                    navController.navigate(Screen.FloorMap.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onLogoutClick = {
+                    authViewModel.logout()
+                    JetsonRepository.clear()
+                    WebSocketManager.disconnect()
+
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.Main.route) {
+                            inclusive = true
+                        }
+                    }
+                }
+            )
         }
 
         composable(Screen.FloorMap.route) {

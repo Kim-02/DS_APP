@@ -2,9 +2,6 @@ package com.example.ds_safer.domain.model
 
 import com.google.gson.annotations.SerializedName
 
-data class JetsonInfoResponse(
-    @SerializedName("jetson_id") val jetsonId: Int
-)
 
 // ==========================================
 // 발견 센서 목록 응답
@@ -88,13 +85,6 @@ data class SimpleResponse(
     @SerializedName("message") val message: String
 )
 
-// ==========================================
-// 작업자 이름 조회 응답
-// ==========================================
-data class WorkerNameResponse(
-    @SerializedName("status") val status: String,
-    @SerializedName("worker_name") val workerName: String
-)
 
 // ==========================================
 // 사건 조치사항 요청
@@ -116,6 +106,7 @@ data class FloorMapInfo(
     @SerializedName("map_id") val mapId: Int,
     @SerializedName("jetson_id") val jetsonId: Int? = null,
     @SerializedName("space_id") val spaceId: Int? = null,
+    @SerializedName("space_name") val spaceName: String? = null,
     @SerializedName("map_name") val mapName: String,
     @SerializedName("image_base64") val imageBase64: String,
     @SerializedName("image_mime_type") val imageMimeType: String?,
@@ -138,7 +129,10 @@ data class SensorMapPosition(
     @SerializedName("sensor_type") val sensorType: String?,
     @SerializedName("sen_locate") val senLocate: String?,
     @SerializedName("model") val model: String?,
-    @SerializedName("is_online") val isOnline: Int?
+    @SerializedName("is_online") val isOnline: Int?,
+    @SerializedName("latest_temp") val latestTemp: Float? = null,
+    @SerializedName("latest_humidity") val latestHumidity: Float? = null,
+    @SerializedName("latest_measured_at") val latestMeasuredAt: String? = null
 )
 
 data class SaveSensorPositionRequest(
@@ -146,17 +140,6 @@ data class SaveSensorPositionRequest(
     @SerializedName("sensor_id") val sensorId: String,
     @SerializedName("x_ratio") val xRatio: Float,
     @SerializedName("y_ratio") val yRatio: Float
-)
-
-data class LatestTempHumidityResponse(
-    @SerializedName("status") val status: String,
-    @SerializedName("data") val data: LatestTempHumidityData?
-)
-
-data class LatestTempHumidityData(
-    @SerializedName("temp") val temp: Float?,
-    @SerializedName("humid") val humid: Float?,
-    @SerializedName("time") val time: String?
 )
 
 // ==========================================
@@ -198,11 +181,6 @@ data class AssignedHeartBandData(
     @SerializedName("mqtt_topic") val mqttTopic: String? = null
 )
 
-data class UnassignSensorResponse(
-    @SerializedName("success") val success: Boolean,
-    @SerializedName("message") val message: String
-)
-
 // ==========================================
 // CCTV 모듈 기준 모델
 // 기준 서버 모듈:
@@ -234,21 +212,6 @@ data class AppCameraRegisterRequest(
     @SerializedName("rtsp_path") val rtspPath: String? = null
 )
 
-// RTSP URL을 직접 알고 있을 때 사용하는 생성 요청
-data class CameraCreateRequest(
-    @SerializedName("device_id") val deviceId: String,
-    @SerializedName("name") val name: String,
-    @SerializedName("space_id") val spaceId: Int,
-    @SerializedName("rtsp_url") val rtspUrl: String
-)
-
-data class CameraUpdateRequest(
-    @SerializedName("name") val name: String? = null,
-    @SerializedName("is_active") val isActive: Boolean? = null,
-    @SerializedName("space_id") val spaceId: Int? = null,
-    @SerializedName("rtsp_url") val rtspUrl: String? = null
-)
-
 data class CameraOutResponse(
     @SerializedName("id") val id: Int,
     @SerializedName("device_id") val deviceId: String,
@@ -262,17 +225,6 @@ data class CameraOutResponse(
 
 data class CameraDetailResponse(
     @SerializedName("rtsp_url") val rtspUrl: String
-)
-
-data class FirePipelineStatusResponse(
-    @SerializedName("camera_id") val cameraId: Int,
-    @SerializedName("running") val running: Boolean,
-    @SerializedName("latest_result") val latestResult: String?
-)
-
-data class SimplePipelineResponse(
-    @SerializedName("status") val status: String,
-    @SerializedName("camera_id") val cameraId: Int
 )
 
 // ==========================================
@@ -318,4 +270,117 @@ data class JetsonOutDto(
 data class JetsonUnregisterResponse(
     @SerializedName("success") val success: Boolean,
     @SerializedName("message") val message: String
+)
+
+// ==========================================
+// 대시보드 요약 응답
+// GET /api/v1/dashboard/summary?space_id=...
+// ==========================================
+
+data class DashboardSummaryResponse(
+    @SerializedName("success") val success: Boolean? = null,
+    @SerializedName("status") val status: String? = null,
+    @SerializedName("data") val data: DashboardSummaryData? = null
+)
+
+data class DashboardSummaryData(
+    @SerializedName("space_id") val spaceId: Int,
+    @SerializedName("space_name") val spaceName: String? = null,
+    @SerializedName("jetson_id") val jetsonId: Int? = null,
+    @SerializedName("jetson_name") val jetsonName: String? = null,
+    @SerializedName("danger_alert_count") val dangerAlertCount: Int = 0,
+    @SerializedName("sensor_total") val sensorTotal: Int = 0,
+    @SerializedName("cctv_total") val cctvTotal: Int = 0,
+    @SerializedName("worker_total") val workerTotal: Int = 0
+)
+
+// ==========================================
+// 최근 알림
+// GET /api/v1/dashboard/recent-alerts
+// ==========================================
+
+data class RecentAlertsResponse(
+    @SerializedName("success") val success: Boolean? = null,
+    @SerializedName("status") val status: String? = null,
+    @SerializedName("data") val data: List<RecentAlertDto> = emptyList()
+)
+
+data class RecentAlertDto(
+    @SerializedName("event_id") val eventId: Int? = null,
+    @SerializedName("space_id") val spaceId: Int? = null,
+    @SerializedName("title") val title: String? = null,
+    @SerializedName("message") val message: String? = null,
+    @SerializedName("level") val level: String? = null,
+    @SerializedName("source") val source: String? = null,
+    @SerializedName("camera_name") val cameraName: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null,
+    @SerializedName("is_read") val isRead: Int? = null
+)
+
+// ==========================================
+// 센서 목록
+// GET /api/v1/dashboard/sensors
+// ==========================================
+
+data class DashboardSensorsResponse(
+    @SerializedName("success") val success: Boolean? = null,
+    @SerializedName("status") val status: String? = null,
+    @SerializedName("data") val data: List<DashboardSensorDto> = emptyList()
+)
+
+data class DashboardSensorDto(
+    @SerializedName("sen_id") val senId: Int? = null,
+    @SerializedName("sensor_id") val sensorId: String? = null,
+    @SerializedName("sensor_type") val sensorType: String? = null,
+    @SerializedName("sen_name") val senName: String? = null,
+    @SerializedName("sen_locate") val senLocate: String? = null,
+    @SerializedName("model") val model: String? = null,
+    @SerializedName("mqtt_topic") val mqttTopic: String? = null,
+    @SerializedName("is_online") val isOnline: Int? = null,
+    @SerializedName("last_seen_at") val lastSeenAt: String? = null,
+    @SerializedName("space_id") val spaceId: Int? = null
+)
+
+// ==========================================
+// CCTV 목록
+// GET /api/v1/dashboard/cctvs
+// ==========================================
+
+data class DashboardCctvsResponse(
+    @SerializedName("success") val success: Boolean? = null,
+    @SerializedName("status") val status: String? = null,
+    @SerializedName("data") val data: List<DashboardCctvDto> = emptyList()
+)
+
+data class DashboardCctvDto(
+    @SerializedName("sen_id") val senId: Int? = null,
+    @SerializedName("ip_address") val ipAddress: String? = null,
+    @SerializedName("camera_id") val cameraId: String? = null,
+    @SerializedName("health") val health: Int? = null,
+    @SerializedName("space_id") val spaceId: Int? = null,
+    @SerializedName("sen_name") val senName: String? = null,
+    @SerializedName("sensor_id") val sensorId: String? = null,
+    @SerializedName("is_online") val isOnline: Int? = null
+)
+
+// ==========================================
+// 작업자 목록
+// GET /api/v1/dashboard/workers
+// ==========================================
+
+data class DashboardWorkersResponse(
+    @SerializedName("success") val success: Boolean? = null,
+    @SerializedName("status") val status: String? = null,
+    @SerializedName("data") val data: List<DashboardWorkerDto> = emptyList()
+)
+
+data class DashboardWorkerDto(
+    @SerializedName("dept_id") val deptId: Int? = null,
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("is_manager") val isManager: Int? = null,
+    @SerializedName("sen_id") val senId: Int? = null,
+    @SerializedName("sensor_id") val sensorId: String? = null,
+    @SerializedName("sensor_name") val sensorName: String? = null,
+    @SerializedName("sensor_type") val sensorType: String? = null,
+    @SerializedName("space_id") val spaceId: Int? = null
 )

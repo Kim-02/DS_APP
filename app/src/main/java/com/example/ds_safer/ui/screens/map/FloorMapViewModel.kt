@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.ds_safer.data.api.RetrofitClient
 import com.example.ds_safer.data.repository.JetsonRepository
 import com.example.ds_safer.domain.model.FloorMapInfo
+import com.example.ds_safer.domain.model.RecentAlertDto
 import com.example.ds_safer.domain.model.RegisteredSensor
 import com.example.ds_safer.domain.model.SaveSensorPositionRequest
 import com.example.ds_safer.domain.model.SensorMapPosition
@@ -17,6 +18,9 @@ class FloorMapViewModel : ViewModel() {
 
     private val _floorMap = MutableStateFlow<FloorMapInfo?>(null)
     val floorMap = _floorMap.asStateFlow()
+
+    private val _recentAlerts = MutableStateFlow<List<RecentAlertDto>>(emptyList())
+    val recentAlerts = _recentAlerts.asStateFlow()
 
     private val _availableSensors = MutableStateFlow<List<RegisteredSensor>>(emptyList())
     val availableSensors = _availableSensors.asStateFlow()
@@ -33,7 +37,7 @@ class FloorMapViewModel : ViewModel() {
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
 
-    fun selectSensor(sensor: RegisteredSensor) {
+    fun selectSensor(sensor: RegisteredSensor?) {
         _selectedSensor.value = sensor
     }
 
@@ -42,52 +46,83 @@ class FloorMapViewModel : ViewModel() {
     }
 
     fun loadAll() {
-        val device = JetsonRepository.selectedJetson.value ?: return
+        val device = JetsonRepository.selectedJetson.value
+
+        if (device == null) {
+            _floorMap.value = null
+            _availableSensors.value = emptyList()
+            _placedSensors.value = emptyList()
+            _message.value = "선택된 Jetson 정보가 없습니다."
+            return
+        }
+
         val spaceId = device.spaceId
 
-        if (spaceId == null) {
+        if (spaceId == null || spaceId <= 0) {
+            _floorMap.value = null
+            _availableSensors.value = emptyList()
+            _placedSensors.value = emptyList()
             _message.value = "Jetson에 등록된 공간 정보가 없습니다."
             return
         }
 
         viewModelScope.launch {
             _isLoading.value = true
+            _message.value = null
+
             try {
                 val baseUrl = "http://${device.ipAddress}:${device.port}/"
                 val service = RetrofitClient.createService(baseUrl)
 
-                // 평면도 조회: space_id 기준
+                Log.d("FloorMapVM", "loadAll baseUrl=$baseUrl, spaceId=$spaceId")
+
                 val mapResponse = service.getFloorMapBySpaceId(spaceId)
+
                 if (mapResponse.status == "success") {
                     _floorMap.value = mapResponse.data
                 } else {
+                    _floorMap.value = null
+                    _placedSensors.value = emptyList()
                     _message.value = "평면도 정보를 불러오지 못했습니다."
                 }
 
-                // 배치 가능한 온습도 센서 조회: space_id 기준
                 val mapId = _floorMap.value?.mapId
+
                 val sensorResponse = service.getAvailableTempSensorsForMapBySpace(
                     spaceId = spaceId,
                     mapId = mapId
                 )
+
                 if (sensorResponse.status == "success") {
                     _availableSensors.value = sensorResponse.data
                 } else {
                     _availableSensors.value = emptyList()
                 }
 
-                // 이미 배치된 센서 위치 조회: map_id 기준 (기존 유지)
-                mapId?.let { mid ->
-                    val placedResponse = service.getMapSensorPositions(mid)
+                if (mapId != null) {
+                    val placedResponse = service.getMapSensorPositions(mapId)
+
                     if (placedResponse.status == "success") {
                         _placedSensors.value = placedResponse.data
                     } else {
                         _placedSensors.value = emptyList()
                     }
+                } else {
+                    _placedSensors.value = emptyList()
+                }
+
+                try {
+                    val alertResponse = service.getRecentAlerts(spaceId, 5)
+                    _recentAlerts.value = alertResponse.data
+                } catch (_: Exception) {
+                    _recentAlerts.value = emptyList()
                 }
 
             } catch (e: Exception) {
                 Log.e("FloorMapVM", "loadAll error", e)
+                _floorMap.value = null
+                _availableSensors.value = emptyList()
+                _placedSensors.value = emptyList()
                 _message.value = "평면도 정보를 불러오지 못했습니다."
             } finally {
                 _isLoading.value = false
@@ -95,47 +130,96 @@ class FloorMapViewModel : ViewModel() {
         }
     }
 
+    /**
+     * 기존 방식 유지:
+     * 화면에서 선택된 센서를 기준으로 저장
+     */
     fun saveSensorPosition(xRatio: Float, yRatio: Float) {
-        val device = JetsonRepository.selectedJetson.value ?: return
+        val selected = _selectedSensor.value
 
-        val selected = _selectedSensor.value ?: run {
+        if (selected == null) {
             _message.value = "먼저 온습도 센서를 선택해주세요."
             return
         }
 
-        val mapInfo = _floorMap.value ?: run {
+        val mapInfo = _floorMap.value
+
+        if (mapInfo == null) {
             _message.value = "평면도 정보가 없습니다."
             return
         }
 
+        saveSensorPosition(
+            mapId = mapInfo.mapId,
+            sensorId = selected.sensorId,
+            xRatio = xRatio,
+            yRatio = yRatio
+        )
+    }
+
+    /**
+     * 새 화면 코드에서 직접 호출할 수 있는 방식.
+     * map_id 기준으로 위치 저장.
+     */
+    fun saveSensorPosition(
+        mapId: Int,
+        sensorId: String,
+        xRatio: Float,
+        yRatio: Float
+    ) {
+        val device = JetsonRepository.selectedJetson.value
+
+        if (device == null) {
+            _message.value = "선택된 Jetson 정보가 없습니다."
+            return
+        }
+
         viewModelScope.launch {
+            _isLoading.value = true
+            _message.value = null
+
             try {
                 val baseUrl = "http://${device.ipAddress}:${device.port}/"
                 val service = RetrofitClient.createService(baseUrl)
 
                 val response = service.saveSensorPosition(
                     SaveSensorPositionRequest(
-                        mapId = mapInfo.mapId,
-                        sensorId = selected.sensorId,
+                        mapId = mapId,
+                        sensorId = sensorId,
                         xRatio = xRatio,
                         yRatio = yRatio
                     )
                 )
 
                 if (response.status == "success") {
-                    _message.value = "온습도 센서 위치 저장 완료"
+                    _message.value = "센서 위치 저장 완료"
 
-                    val placedResponse = service.getMapSensorPositions(mapInfo.mapId)
+                    val placedResponse = service.getMapSensorPositions(mapId)
                     if (placedResponse.status == "success") {
                         _placedSensors.value = placedResponse.data
                     }
+
+                    val spaceId = device.spaceId
+                    if (spaceId != null && spaceId > 0) {
+                        val sensorResponse = service.getAvailableTempSensorsForMapBySpace(
+                            spaceId = spaceId,
+                            mapId = mapId
+                        )
+
+                        if (sensorResponse.status == "success") {
+                            _availableSensors.value = sensorResponse.data
+                        }
+                    }
+
+                    _selectedSensor.value = null
                 } else {
                     _message.value = response.message
                 }
-
             } catch (e: Exception) {
                 Log.e("FloorMapVM", "saveSensorPosition error", e)
                 _message.value = "센서 위치 저장 실패"
+            } finally {
+                _isLoading.value = false
             }
         }
     }

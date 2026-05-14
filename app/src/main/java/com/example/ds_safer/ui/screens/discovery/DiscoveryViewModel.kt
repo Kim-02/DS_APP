@@ -19,19 +19,14 @@ class DiscoveryViewModel(
     private val authDataStore: AuthDataStore
 ) : ViewModel() {
 
-    // DB에 등록된 Jetson만 메인 화면에 표시
     private val _registeredJetsons = MutableStateFlow<List<JetsonDevice>>(emptyList())
     val registeredJetsons = _registeredJetsons.asStateFlow()
 
-    // mDNS로 발견된 Jetson은 등록 페이지에서만 사용
     private val _discoveredJetsons = MutableStateFlow<List<JetsonDevice>>(emptyList())
     val discoveredJetsons = _discoveredJetsons.asStateFlow()
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning = _isScanning.asStateFlow()
-
-    private val _isLoadingRegisteredJetsons = MutableStateFlow(false)
-    val isLoadingRegisteredJetsons = _isLoadingRegisteredJetsons.asStateFlow()
 
     init {
         startScan()
@@ -42,13 +37,11 @@ class DiscoveryViewModel(
 
         nsdHelper.startDiscovery(object : NsdHelper.NsdDiscoveryListener {
             override fun onDeviceFound(device: JetsonDevice) {
-                val currentList = _discoveredJetsons.value
-
-                if (currentList.none { it.ipAddress == device.ipAddress && it.port == device.port }) {
-                    _discoveredJetsons.value = currentList + device
+                val current = _discoveredJetsons.value
+                if (current.none { it.ipAddress == device.ipAddress && it.port == device.port }) {
+                    _discoveredJetsons.value = current + device
                 }
 
-                // mDNS 서버가 발견되면, 그 서버의 DB 등록 Jetson 목록을 다시 조회
                 loadRegisteredJetsonsFromDiscoveredServers()
             }
 
@@ -62,39 +55,41 @@ class DiscoveryViewModel(
         })
     }
 
-    /**
-     * 메인 화면용.
-     *
-     * mDNS로 발견된 서버에 접속해서 /api/v1/jetsons를 조회하고,
-     * DB에 등록된 Jetson만 registeredJetsons에 넣는다.
-     *
-     * 따라서 메인 화면에는 더 이상 mDNS 발견 목록이 직접 표시되지 않는다.
-     */
     fun loadRegisteredJetsonsFromDiscoveredServers() {
         viewModelScope.launch {
-            _isLoadingRegisteredJetsons.value = true
+            val discoveredServers = _discoveredJetsons.value
 
-            try {
-                val discoveredServers = _discoveredJetsons.value
+            if (discoveredServers.isEmpty()) {
+                return@launch
+            }
 
-                if (discoveredServers.isEmpty()) {
-                    _registeredJetsons.value = emptyList()
-                    return@launch
-                }
+            val result = mutableListOf<JetsonDevice>()
 
-                val result = mutableListOf<JetsonDevice>()
+            for (server in discoveredServers) {
+                try {
+                    val service = RetrofitClient.createService(
+                        "http://${server.ipAddress}:${server.port}/"
+                    )
 
-                for (server in discoveredServers) {
-                    try {
-                        val api = RetrofitClient.createService(
-                            "http://${server.ipAddress}:${server.port}"
-                        )
+                    val rows = service.getRegisteredJetsonsV1()
 
-                        val rows = api.getRegisteredJetsonsV1()
+                    rows.forEach { row ->
+                        if (row.jetsonStatus) {
+                            var sensorTotal = 0
+                            var cctvTotal = 0
+                            var workerTotal = 0
 
-                        rows.forEach { row ->
-                            // 비활성화된 Jetson까지 보여주고 싶으면 이 if 제거
-                            if (!row.jetsonStatus) return@forEach
+                            val spaceId = row.spaceId
+                            if (spaceId != null && spaceId > 0) {
+                                try {
+                                    val summary = service.getDashboardSummary(spaceId)
+                                    summary.data?.let {
+                                        sensorTotal = it.sensorTotal
+                                        cctvTotal = it.cctvTotal
+                                        workerTotal = it.workerTotal
+                                    }
+                                } catch (_: Exception) { }
+                            }
 
                             result.add(
                                 JetsonDevice(
@@ -105,52 +100,48 @@ class DiscoveryViewModel(
                                     jetsonId = row.jetsonId,
                                     spaceId = row.spaceId,
                                     spaceName = row.spaceName,
-                                    isRegistered = true
+                                    isRegistered = true,
+                                    sensorTotal = sensorTotal,
+                                    cctvTotal = cctvTotal,
+                                    workerTotal = workerTotal
                                 )
                             )
                         }
-                    } catch (e: Exception) {
-                        Log.e(
-                            "DiscoveryViewModel",
-                            "등록 Jetson 조회 실패: ${server.ipAddress}:${server.port}",
-                            e
-                        )
                     }
+                } catch (e: Exception) {
+                    Log.e(
+                        "DiscoveryViewModel",
+                        "등록 Jetson 조회 실패: ${server.ipAddress}:${server.port}",
+                        e
+                    )
                 }
+            }
 
-                _registeredJetsons.value = result.distinctBy {
-                    "${it.ipAddress}:${it.port}"
-                }
-            } finally {
-                _isLoadingRegisteredJetsons.value = false
+            _registeredJetsons.value = result.distinctBy {
+                "${it.ipAddress}:${it.port}"
             }
         }
     }
 
-    /**
-     * 구형 등록 함수.
-     * 이제 mDNS Jetson 등록에는 사용하지 않는다.
-     * Jetson-space 매핑 등록은 JetsonSpaceRegisterViewModel.registerSelectedJetson()을 사용한다.
-     *
-     * 기존 코드에서 참조하고 있을 수 있어 일단 남겨둔다.
-     */
-    @Deprecated("Jetson 신규 등록은 /api/v1/jetsons/register를 사용하는 JetsonSpaceRegisterViewModel에서 처리하세요.")
+    @Deprecated("Jetson 신규 등록은 JetsonSpaceRegisterScreen에서 space_id와 함께 처리하세요.")
     fun registerDevice(device: JetsonDevice) {
         viewModelScope.launch {
             try {
                 val deptIdString = authDataStore.authFlow.first().deptId
                 val deptId = deptIdString.toIntOrNull() ?: 0
 
-                val baseUrl = "http://${device.ipAddress}:${device.port}/"
-                val service = RetrofitClient.createService(baseUrl)
+                val service = RetrofitClient.createService(
+                    "http://${device.ipAddress}:${device.port}/"
+                )
 
                 val request = JetsonRegisterRequest(dept_id = deptId, app_id = "app1")
                 val response = service.registerJetson(request)
 
                 if (response.isSuccessful && response.body()?.register_status == "success") {
-                    val responseBody = response.body()!!
-                    val rawIdString = responseBody.jetson_id
-                    val parsedId = rawIdString.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
+                    val body = response.body()!!
+                    val parsedId = body.jetson_id
+                        .replace(Regex("[^0-9]"), "")
+                        .toIntOrNull() ?: 0
 
                     val newDevice = device.copy(
                         jetsonId = parsedId,
@@ -160,11 +151,9 @@ class DiscoveryViewModel(
 
                     JetsonRepository.selectJetson(newDevice)
                     loadRegisteredJetsonsFromDiscoveredServers()
-                } else {
-                    Log.e("API_ERROR", "구형 Jetson 등록 실패: ${response.errorBody()?.string()}")
                 }
             } catch (e: Exception) {
-                Log.e("API_ERROR", "구형 Jetson 등록 통신 실패", e)
+                Log.e("DiscoveryViewModel", "구형 Jetson 등록 실패", e)
             }
         }
     }

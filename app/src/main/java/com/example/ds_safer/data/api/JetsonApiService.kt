@@ -1,13 +1,11 @@
 package com.example.ds_safer.data.api
 
 import com.example.ds_safer.domain.model.*
-import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
-import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -28,12 +26,6 @@ interface JetsonApiService {
     // ==========================================
     // Health / Legacy Jetson API
     // ==========================================
-
-    @GET("/")
-    suspend fun checkHealth(): Response<ResponseBody>
-
-    @GET("api/jetson")
-    suspend fun getJetsonInfo(): JetsonInfoResponse
 
     /**
      * 구형 API.
@@ -65,16 +57,41 @@ interface JetsonApiService {
         @Body request: JetsonAppRegisterRequest
     ): JetsonAppRegisterResponse
 
-    @POST("/api/v1/jetsons/{jetsonId}/unregister")
-    suspend fun unregisterJetsonV1(
-        @Path("jetsonId") jetsonId: Int
-    ): JetsonUnregisterResponse
-
     /** Jetson 완전 삭제 (연결된 sensor + CCTV runtime 포함). */
     @DELETE("/api/v1/jetsons/{jetsonId}")
     suspend fun deleteJetsonV1(
         @Path("jetsonId") jetsonId: Int
     ): JetsonUnregisterResponse
+
+    // ==========================================
+    // Dashboard API
+    // ==========================================
+
+    @GET("/api/v1/dashboard/summary")
+    suspend fun getDashboardSummary(
+        @Query("space_id") spaceId: Int
+    ): DashboardSummaryResponse
+
+    @GET("/api/v1/dashboard/recent-alerts")
+    suspend fun getRecentAlerts(
+        @Query("space_id") spaceId: Int,
+        @Query("limit") limit: Int = 20
+    ): RecentAlertsResponse
+
+    @GET("/api/v1/dashboard/sensors")
+    suspend fun getDashboardSensors(
+        @Query("space_id") spaceId: Int
+    ): DashboardSensorsResponse
+
+    @GET("/api/v1/dashboard/cctvs")
+    suspend fun getDashboardCctvs(
+        @Query("space_id") spaceId: Int
+    ): DashboardCctvsResponse
+
+    @GET("/api/v1/dashboard/workers")
+    suspend fun getDashboardWorkers(
+        @Query("space_id") spaceId: Int
+    ): DashboardWorkersResponse
 
     // ==========================================
     // Sensor API
@@ -105,55 +122,15 @@ interface JetsonApiService {
         @Query("space_id") spaceId: Int? = null
     ): List<CameraOutResponse>
 
-    @POST("cctv/cameras/")
-    suspend fun createCamera(
-        @Body request: CameraCreateRequest
-    ): CameraOutResponse
-
     @POST("/api/v1/cctv/cameras/register")
     suspend fun registerCctv(
         @Body request: AppCameraRegisterRequest
-    ): CameraOutResponse
-
-    @GET("/api/v1/cctv/cameras/{sensorId}")
-    suspend fun getCamera(
-        @Path("sensorId") sensorId: Int
-    ): CameraOutResponse
-
-    @PUT("/api/v1/cctv/cameras/{sensorId}")
-    suspend fun updateCamera(
-        @Path("sensorId") sensorId: Int,
-        @Body request: CameraUpdateRequest
     ): CameraOutResponse
 
     @DELETE("/api/v1/cctv/cameras/{sensorId}")
     suspend fun deleteCamera(
         @Path("sensorId") sensorId: Int
     ): Response<Unit>
-
-    @GET("/api/v1/cctv/cameras/{sensorId}/fire-pipeline")
-    suspend fun getFirePipelineStatus(
-        @Path("sensorId") sensorId: Int
-    ): FirePipelineStatusResponse
-
-    @POST("/api/v1/cctv/cameras/{sensorId}/fire-pipeline/start")
-    suspend fun startFirePipeline(
-        @Path("sensorId") sensorId: Int
-    ): SimplePipelineResponse
-
-    @POST("/api/v1/cctv/cameras/{sensorId}/fire-pipeline/stop")
-    suspend fun stopFirePipeline(
-        @Path("sensorId") sensorId: Int
-    ): SimplePipelineResponse
-
-    // ==========================================
-    // Worker / Event / Map API
-    // ==========================================
-
-    @GET("api/worker")
-    suspend fun getWorkerName(
-        @Query("worker_id") workerId: String
-    ): Response<WorkerNameResponse>
 
     @POST("api/event/measures")
     suspend fun postEventMeasures(
@@ -178,28 +155,11 @@ interface JetsonApiService {
         @Path("mapId") mapId: Int
     ): SensorPositionListResponse
 
-    /** Deprecated: getFloorMapBySpaceId() 를 사용하세요. */
-    @GET("api/maps/{jetsonId}")
-    suspend fun getFloorMap(
-        @Path("jetsonId") jetsonId: Int
-    ): FloorMapResponse
-
-    /** Deprecated: getAvailableTempSensorsForMapBySpace() 를 사용하세요. */
-    @GET("api/maps/{jetsonId}/available-sensors")
-    suspend fun getAvailableTempSensorsForMap(
-        @Path("jetsonId") jetsonId: Int,
-        @Query("map_id") mapId: Int? = null
-    ): SensorListResponse
 
     @POST("api/maps/sensors/position")
     suspend fun saveSensorPosition(
         @Body request: SaveSensorPositionRequest
     ): SimpleResponse
-
-    @GET("api/maps/sensors/{sensorId}/latest")
-    suspend fun getLatestTempSensorValue(
-        @Path("sensorId") sensorId: String
-    ): LatestTempHumidityResponse
 
     @GET("api/v1/workers/db")
     suspend fun getDbWorkers(
@@ -216,9 +176,4 @@ interface JetsonApiService {
         @Path("deptId") deptId: Int,
         @Body request: AssignHeartBandRequest
     ): AssignHeartBandResponse
-
-    @POST("api/v1/workers/{deptId}/unassign-sensor")
-    suspend fun unassignWorkerSensor(
-        @Path("deptId") deptId: Int
-    ): UnassignSensorResponse
 }

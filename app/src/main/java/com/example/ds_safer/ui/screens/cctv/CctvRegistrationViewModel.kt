@@ -11,6 +11,7 @@ import com.example.ds_safer.domain.model.AppCameraRegisterRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 class CctvRegistrationViewModel : ViewModel() {
 
@@ -25,6 +26,18 @@ class CctvRegistrationViewModel : ViewModel() {
 
         if (selectedJetson == null) {
             _uiState.value = CctvUiState.Error("선택된 Jetson이 없습니다.")
+            return
+        }
+
+        val jetsonId = selectedJetson.jetsonId
+        if (jetsonId == null || jetsonId <= 0) {
+            _uiState.value = CctvUiState.Error("DB에 등록된 Jetson 정보가 없습니다. Jetson을 공간에 먼저 등록해주세요.")
+            return
+        }
+
+        val spaceId = selectedJetson.spaceId
+        if (spaceId == null || spaceId <= 0) {
+            _uiState.value = CctvUiState.Error("현재 Jetson에 등록된 공간 정보가 없습니다. Jetson을 다시 등록해주세요.")
             return
         }
 
@@ -53,13 +66,29 @@ class CctvRegistrationViewModel : ViewModel() {
                     cameraUsername = DEFAULT_CAMERA_USERNAME,
                     cameraPassword = trimmedPassword,
                     name = "CCTV-$trimmedIp",
-                    processId = DEFAULT_PROCESS_ID,
+                    spaceId = spaceId,
+                    jetsonId = jetsonId,
                     rtspPath = null
                 )
 
                 service.registerCctv(request)
 
                 _uiState.value = CctvUiState.Success
+            } catch (e: HttpException) {
+                val errorBody = e.response()?.errorBody()?.string()
+                val message = when (e.code()) {
+                    400, 404, 409, 422 -> {
+                        extractDetail(errorBody)
+                            ?: "CCTV 등록 실패: IP, ID, 비밀번호 또는 RTSP 경로를 확인해주세요."
+                    }
+
+                    else -> {
+                        extractDetail(errorBody)
+                            ?: "CCTV 등록 중 서버 오류가 발생했습니다. (${e.code()})"
+                    }
+                }
+
+                _uiState.value = CctvUiState.Error(message)
             } catch (e: Exception) {
                 e.printStackTrace()
                 _uiState.value = CctvUiState.Error(
@@ -72,14 +101,16 @@ class CctvRegistrationViewModel : ViewModel() {
     companion object {
         private const val DEFAULT_CAMERA_USERNAME = "admin"
 
-        /*
-         * 중요:
-         * 현재 Python CCTV 모듈의 AppCameraRegisterReq는 process_id를 필수로 요구합니다.
-         * 앱에서 공정 선택 기능이 아직 없다면 일단 기본값 1을 사용합니다.
-         *
-         * 나중에 process 목록/선택 API가 생기면 이 값을 선택된 process_id로 교체하세요.
-         */
-        private const val DEFAULT_PROCESS_ID = 1
+        private fun extractDetail(errorBody: String?): String? {
+            if (errorBody.isNullOrBlank()) return null
+
+            return try {
+                val regex = Regex("\"detail\"\\s*:\\s*\"([^\"]+)\"")
+                regex.find(errorBody)?.groupValues?.get(1)
+            } catch (_: Exception) {
+                null
+            }
+        }
     }
 }
 

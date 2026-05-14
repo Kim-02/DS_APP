@@ -1,6 +1,5 @@
 package com.example.ds_safer.ui.screens.detail
 
-import android.content.Intent
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -25,7 +24,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -38,10 +36,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,19 +55,18 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
 import com.example.ds_safer.data.api.RetrofitClient
 import com.example.ds_safer.domain.model.FloorMapInfo
 import com.example.ds_safer.domain.model.JetsonDevice
 import com.example.ds_safer.domain.model.LatestTempHumidityData
 import com.example.ds_safer.domain.model.SensorMapPosition
 import com.example.ds_safer.ui.screens.floormap.decodeBase64ToBitmap
-import com.example.ds_safer.ui.screens.monitor.MonitoringActivity
+import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,7 +78,112 @@ fun JetsonDetailScreen(
     onNavigateToFloorMap: () -> Unit,
     onBackClick: () -> Unit
 ) {
-    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var showDisconnectDialog by remember { mutableStateOf(false) }
+    var isDisconnecting by remember { mutableStateOf(false) }
+    var disconnectError by remember { mutableStateOf<String?>(null) }
+
+    if (showDisconnectDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isDisconnecting) {
+                    showDisconnectDialog = false
+                }
+            },
+            title = {
+                Text("Jetson 등록 해제")
+            },
+            text = {
+                Column {
+                    Text("이 Jetson을 DB 등록 목록에서 삭제하시겠습니까?")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "삭제 후에도 Jetson 서버가 실행 중이면 mDNS 발견 목록에는 다시 나타날 수 있습니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+
+                    disconnectError?.let {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    if (isDisconnecting) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("등록 해제 중입니다.")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isDisconnecting,
+                    onClick = {
+                        val jetsonId = device.jetsonId
+
+                        if (jetsonId == null || jetsonId <= 0) {
+                            disconnectError = "DB에 등록된 Jetson ID가 없습니다."
+                            return@TextButton
+                        }
+
+                        scope.launch {
+                            try {
+                                isDisconnecting = true
+                                disconnectError = null
+
+                                val baseUrl = "http://${device.ipAddress}:${device.port}/"
+                                val service = RetrofitClient.createService(baseUrl)
+
+                                val response = service.deleteJetsonV1(jetsonId)
+
+                                if (response.success) {
+                                    showDisconnectDialog = false
+                                    onDisconnectClick()
+                                } else {
+                                    disconnectError = response.message.ifBlank {
+                                        "Jetson 등록 해제에 실패했습니다."
+                                    }
+                                }
+                            } catch (e: HttpException) {
+                                disconnectError = when (e.code()) {
+                                    404 -> "서버에 해당 Jetson 삭제 API가 없거나, Jetson을 찾을 수 없습니다."
+                                    500 -> "서버 내부 오류로 Jetson 등록 해제에 실패했습니다."
+                                    else -> "Jetson 등록 해제 실패: HTTP ${e.code()}"
+                                }
+                            } catch (e: Exception) {
+                                disconnectError = "Jetson 등록 해제 실패: ${e.message}"
+                            } finally {
+                                isDisconnecting = false
+                            }
+                        }
+                    }
+                ) {
+                    Text("해제", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isDisconnecting,
+                    onClick = {
+                        showDisconnectDialog = false
+                    }
+                ) {
+                    Text("취소")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -115,12 +217,15 @@ fun JetsonDetailScreen(
         ) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("IP 주소: ${device.ipAddress}", style = MaterialTheme.typography.bodyLarge)
                     Text("포트: ${device.port}", style = MaterialTheme.typography.bodyLarge)
-                    Text("기기 ID: ${device.jetsonId}", style = MaterialTheme.typography.bodyLarge)
+                    Text("기기 ID: ${device.jetsonId ?: "미등록"}", style = MaterialTheme.typography.bodyLarge)
+                    Text("등록 공간: ${device.spaceName ?: "미지정"}", style = MaterialTheme.typography.bodyLarge)
                 }
             }
 
@@ -143,8 +248,13 @@ fun JetsonDetailScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             Button(
-                onClick = onDisconnectClick,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                onClick = {
+                    disconnectError = null
+                    showDisconnectDialog = true
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -199,11 +309,11 @@ private fun JetsonFloorMapPreview(
     var popupLatest by remember { mutableStateOf<LatestTempHumidityData?>(null) }
     var popupLoading by remember { mutableStateOf(false) }
 
-    LaunchedEffect(device.ipAddress, device.port, device.jetsonId) {
-        val jetsonId = device.jetsonId
-        if (jetsonId == null) {
+    LaunchedEffect(device.ipAddress, device.port, device.spaceId) {
+        val spaceId = device.spaceId
+        if (spaceId == null) {
             isLoading = false
-            errorMessage = "젯슨 ID가 없습니다."
+            errorMessage = "Jetson에 등록된 공간 정보가 없습니다."
             return@LaunchedEffect
         }
 
@@ -214,14 +324,18 @@ private fun JetsonFloorMapPreview(
             val baseUrl = "http://${device.ipAddress}:${device.port}/"
             val service = RetrofitClient.createService(baseUrl)
 
-            val mapResponse = service.getFloorMap(jetsonId)
+            // 평면도 조회: space_id 기준
+            val mapResponse = service.getFloorMapBySpaceId(spaceId)
             if (mapResponse.status == "success") {
                 floorMap = mapResponse.data
                 bitmap = decodeBase64ToBitmap(mapResponse.data.imageBase64)
 
+                // 센서 위치 조회: map_id 기준 (기존 유지)
                 val sensorResponse = service.getMapSensorPositions(mapResponse.data.mapId)
                 if (sensorResponse.status == "success") {
-                    placedSensors = sensorResponse.data.filter { it.sensorType == "temp_humidity" }
+                    placedSensors = sensorResponse.data.filter {
+                        it.sensorType == "temp_humidity"
+                    }
                 } else {
                     placedSensors = emptyList()
                 }
@@ -250,6 +364,7 @@ private fun JetsonFloorMapPreview(
                     popupLoading -> {
                         Text("최신 온습도 데이터를 불러오는 중입니다.")
                     }
+
                     popupLatest == null -> {
                         Column {
                             Text("온도: -")
@@ -257,6 +372,7 @@ private fun JetsonFloorMapPreview(
                             Text("최근 수신: -")
                         }
                     }
+
                     else -> {
                         Column {
                             Text("온도: ${popupLatest?.temp ?: "-"}°C")
@@ -283,7 +399,9 @@ private fun JetsonFloorMapPreview(
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     ) {
         Box(
             modifier = Modifier
@@ -353,15 +471,19 @@ private fun JetsonFloorMapPreview(
 
                                         scope.launch {
                                             try {
-                                                val baseUrl = "http://${device.ipAddress}:${device.port}/"
-                                                val service = RetrofitClient.createService(baseUrl)
-                                                val latestResponse = service.getLatestTempSensorValue(sensor.sensorId)
+                                                val baseUrl =
+                                                    "http://${device.ipAddress}:${device.port}/"
+                                                val service =
+                                                    RetrofitClient.createService(baseUrl)
+                                                val latestResponse =
+                                                    service.getLatestTempSensorValue(sensor.sensorId)
 
-                                                if (latestResponse.status == "success") {
-                                                    popupLatest = latestResponse.data
-                                                } else {
-                                                    popupLatest = null
-                                                }
+                                                popupLatest =
+                                                    if (latestResponse.status == "success") {
+                                                        latestResponse.data
+                                                    } else {
+                                                        null
+                                                    }
                                             } catch (e: Exception) {
                                                 popupLatest = null
                                             } finally {

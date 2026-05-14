@@ -15,26 +15,26 @@ import com.example.ds_safer.ui.screens.detail.JetsonDetailScreen
 import com.example.ds_safer.ui.screens.discovery.DiscoveryViewModel
 import com.example.ds_safer.ui.screens.floormap.FloorMapScreen
 import com.example.ds_safer.ui.screens.floormap.FloorMapViewModel
+import com.example.ds_safer.ui.screens.jetson.JetsonSpaceRegisterScreen
+import com.example.ds_safer.ui.screens.jetson.JetsonSpaceRegisterViewModel
 import com.example.ds_safer.ui.screens.main.MainDashboardScreen
 import com.example.ds_safer.ui.screens.report.EventReportScreen
 import com.example.ds_safer.ui.screens.sensor.SensorRegistrationScreen
 import com.example.ds_safer.ui.screens.sensor.SensorRegistrationViewModel
 
-// 1️⃣ Screen 라우트
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Main : Screen("main")
     object JetsonDetail : Screen("detail")
 
-    // 목록(관리) 화면 라우트
+    object JetsonSpaceRegister : Screen("jetson_space_register")
+
     object SensorList : Screen("sensor_list")
     object CctvList : Screen("cctv_list")
 
-    // 등록 화면 라우트
     object SensorRegistration : Screen("sensor_register")
     object CctvRegistration : Screen("cctv_register")
 
-    // 평면도 화면 라우트
     object FloorMap : Screen("floor_map")
 
     object EventReport : Screen("event_report/{eventId}") {
@@ -62,10 +62,6 @@ fun NavGraph(
         navController = navController,
         startDestination = startDestination
     ) {
-
-        // ==========================================
-        // 0. 로그인 화면
-        // ==========================================
         composable(Screen.Login.route) {
             LoginScreen(
                 viewModel = authViewModel,
@@ -79,9 +75,6 @@ fun NavGraph(
             )
         }
 
-        // ==========================================
-        // 1. 메인 대시보드 화면
-        // ==========================================
         composable(Screen.Main.route) {
             MainDashboardScreen(
                 viewModel = discoveryViewModel,
@@ -92,6 +85,9 @@ fun NavGraph(
                 },
                 onNavigateToReport = { eventId ->
                     navController.navigate(Screen.EventReport.createRoute(eventId))
+                },
+                onNavigateToJetsonSpaceRegister = {
+                    navController.navigate(Screen.JetsonSpaceRegister.route)
                 },
                 onLogoutClick = {
                     authViewModel.logout()
@@ -107,9 +103,23 @@ fun NavGraph(
             )
         }
 
-        // ==========================================
-        // 2. 젯슨 상세 화면
-        // ==========================================
+        composable(Screen.JetsonSpaceRegister.route) {
+            val jetsonSpaceRegisterViewModel: JetsonSpaceRegisterViewModel = viewModel()
+
+            JetsonSpaceRegisterScreen(
+                discoveryViewModel = discoveryViewModel,
+                viewModel = jetsonSpaceRegisterViewModel,
+                onBackClick = {
+                    discoveryViewModel.loadRegisteredJetsonsFromDiscoveredServers()
+                    navController.popBackStack()
+                },
+                onRegisterSuccess = {
+                    discoveryViewModel.loadRegisteredJetsonsFromDiscoveredServers()
+                    navController.popBackStack()
+                }
+            )
+        }
+
         composable(Screen.JetsonDetail.route) {
             val currentDevice by JetsonRepository.selectedJetson.collectAsState()
 
@@ -118,6 +128,8 @@ fun NavGraph(
                     device = currentDevice!!,
                     onDisconnectClick = {
                         JetsonRepository.clear()
+                        discoveryViewModel.loadRegisteredJetsonsFromDiscoveredServers()
+
                         navController.popBackStack(
                             route = Screen.Main.route,
                             inclusive = false
@@ -139,9 +151,6 @@ fun NavGraph(
             }
         }
 
-        // ==========================================
-        // 2-1. 평면도 화면
-        // ==========================================
         composable(Screen.FloorMap.route) {
             val floorMapViewModel: FloorMapViewModel = viewModel()
 
@@ -153,9 +162,6 @@ fun NavGraph(
             )
         }
 
-        // ==========================================
-        // 3-1. 센서 목록(관리) 화면
-        // ==========================================
         composable(Screen.SensorList.route) {
             val sensorListViewModel: com.example.ds_safer.ui.screens.sensor.SensorListViewModel =
                 viewModel()
@@ -171,9 +177,6 @@ fun NavGraph(
             )
         }
 
-        // ==========================================
-        // 3-2. 센서 등록 화면
-        // ==========================================
         composable(Screen.SensorRegistration.route) {
             val sensorViewModel: SensorRegistrationViewModel = viewModel()
 
@@ -185,9 +188,6 @@ fun NavGraph(
             )
         }
 
-        // ==========================================
-        // 4-1. CCTV 목록(관리) 화면
-        // ==========================================
         composable(Screen.CctvList.route) {
             val cctvListViewModel: com.example.ds_safer.ui.screens.cctv.CctvListViewModel =
                 viewModel()
@@ -203,9 +203,6 @@ fun NavGraph(
             )
         }
 
-        // ==========================================
-        // 4-2. CCTV 등록 화면
-        // ==========================================
         composable(Screen.CctvRegistration.route) {
             val cctvViewModel: com.example.ds_safer.ui.screens.cctv.CctvRegistrationViewModel =
                 viewModel()
@@ -213,13 +210,6 @@ fun NavGraph(
             com.example.ds_safer.ui.screens.cctv.CctvRegistrationScreen(
                 viewModel = cctvViewModel,
                 onSuccess = {
-                    /*
-                     * 단순 popBackStack()만 하면 기존 CctvListViewModel이 살아 있어서
-                     * 방금 등록한 CCTV 목록이 바로 갱신되지 않을 수 있습니다.
-                     *
-                     * 따라서 기존 cctv_list를 스택에서 제거하고,
-                     * 새 cctv_list로 다시 진입시켜 fetchCameras()가 다시 실행되게 합니다.
-                     */
                     navController.navigate(Screen.CctvList.route) {
                         popUpTo(Screen.CctvList.route) {
                             inclusive = true
@@ -230,9 +220,6 @@ fun NavGraph(
             )
         }
 
-        // ==========================================
-        // 5. 이벤트 보고서 화면
-        // ==========================================
         composable(Screen.EventReport.route) { backStackEntry ->
             val eventIdString = backStackEntry.arguments?.getString("eventId") ?: "0"
             val eventId = eventIdString.toIntOrNull() ?: 0

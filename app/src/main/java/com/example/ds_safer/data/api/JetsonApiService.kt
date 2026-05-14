@@ -25,111 +25,129 @@ data class JetsonRegisterResponse(
 
 interface JetsonApiService {
 
-    // 1. 젯슨 헬스 체크
+    // ==========================================
+    // Health / Legacy Jetson API
+    // ==========================================
+
     @GET("/")
     suspend fun checkHealth(): Response<ResponseBody>
 
-    // 서버에 실제로 없으면 제거하거나 서버 쪽에 추가 필요
     @GET("api/jetson")
     suspend fun getJetsonInfo(): JetsonInfoResponse
 
+    /**
+     * 구형 API.
+     * mDNS Jetson 신규 등록용으로 사용하지 말 것.
+     * 기존 앱 연동/호환용으로만 유지.
+     */
     @POST("api/jetson/register")
     suspend fun registerJetson(
         @Body request: JetsonRegisterRequest
     ): Response<JetsonRegisterResponse>
 
-    // 발견된 센서 목록
+    // ==========================================
+    // Jetson-space 신규 등록 API
+    // 서버:
+    // GET  /api/v1/spaces
+    // GET  /api/v1/jetsons
+    // POST /api/v1/jetsons/register
+    // POST /api/v1/jetsons/{jetson_id}/unregister
+    // ==========================================
+
+    @GET("/api/v1/spaces")
+    suspend fun getSpaces(): SpaceListResponse
+
+    @GET("/api/v1/jetsons")
+    suspend fun getRegisteredJetsonsV1(): List<JetsonOutDto>
+
+    @POST("/api/v1/jetsons/register")
+    suspend fun registerJetsonFromMdns(
+        @Body request: JetsonAppRegisterRequest
+    ): JetsonAppRegisterResponse
+
+    @POST("/api/v1/jetsons/{jetsonId}/unregister")
+    suspend fun unregisterJetsonV1(
+        @Path("jetsonId") jetsonId: Int
+    ): JetsonUnregisterResponse
+
+    /** Jetson 완전 삭제 (연결된 sensor + CCTV runtime 포함). */
+    @DELETE("/api/v1/jetsons/{jetsonId}")
+    suspend fun deleteJetsonV1(
+        @Path("jetsonId") jetsonId: Int
+    ): JetsonUnregisterResponse
+
+    // ==========================================
+    // Sensor API
+    // ==========================================
+
     @GET("api/sensors/discovered")
     suspend fun getDiscoverSensors(): SensorDiscoveryResponse
 
-    // 등록된 센서 목록
     @GET("api/sensors")
     suspend fun getRegisteredSensors(): SensorListResponse
 
-    // 센서 등록
     @POST("api/sensors/register")
     suspend fun registerSensor(
         @Body request: SensorRegisterRequest
     ): SimpleResponse
 
-    // 센서 등록 해제
     @POST("api/sensors/unregister")
     suspend fun unregisterSensor(
         @Body request: SensorUnregisterRequest
     ): SimpleResponse
 
     // ==========================================
-    // CCTV 모듈 API
-    // 기준 Python router:
-    // prefix = /cctv/cameras
+    // CCTV API
     // ==========================================
 
-    // CCTV 목록 조회
     @GET("/api/v1/cctv/cameras/")
     suspend fun getCameras(
-        @Query("process_id") processId: Int? = null
+        @Query("space_id") spaceId: Int? = null
     ): List<CameraOutResponse>
 
-    // CCTV 직접 생성
-    // 이미 RTSP URL을 알고 있을 때 사용
     @POST("cctv/cameras/")
     suspend fun createCamera(
         @Body request: CameraCreateRequest
     ): CameraOutResponse
 
-    // CCTV 앱용 등록
-    // 앱에서 IP/PW 입력
-    // camera_username은 AppCameraRegisterRequest에서 "admin" 기본값 사용
-    // 서버에서 RTSP URL 자동 생성
     @POST("/api/v1/cctv/cameras/register")
     suspend fun registerCctv(
         @Body request: AppCameraRegisterRequest
     ): CameraOutResponse
 
-    // CCTV 상세 조회
-    // Python router에서는 sensor_id 기준으로 get_camera 호출
     @GET("/api/v1/cctv/cameras/{sensorId}")
     suspend fun getCamera(
         @Path("sensorId") sensorId: Int
     ): CameraOutResponse
 
-    // CCTV 수정
     @PUT("/api/v1/cctv/cameras/{sensorId}")
     suspend fun updateCamera(
         @Path("sensorId") sensorId: Int,
         @Body request: CameraUpdateRequest
     ): CameraOutResponse
 
-    // CCTV 삭제
     @DELETE("/api/v1/cctv/cameras/{sensorId}")
     suspend fun deleteCamera(
         @Path("sensorId") sensorId: Int
     ): Response<Unit>
 
-    // Fire pipeline 상태 조회
-    // 주의:
-    // 현재 Python router는 path 이름을 camera_id로 쓰고 있으나,
-    // start/stop 내부에서는 service.get_camera(db, camera_id)를 호출합니다.
-    // 따라서 앱에서는 일단 CameraOutResponse.id, 즉 sensor id 기준으로 넘기는 구조로 맞춥니다.
     @GET("/api/v1/cctv/cameras/{sensorId}/fire-pipeline")
     suspend fun getFirePipelineStatus(
         @Path("sensorId") sensorId: Int
     ): FirePipelineStatusResponse
 
-    // Fire pipeline 시작
     @POST("/api/v1/cctv/cameras/{sensorId}/fire-pipeline/start")
     suspend fun startFirePipeline(
         @Path("sensorId") sensorId: Int
     ): SimplePipelineResponse
 
-    // Fire pipeline 중단
     @POST("/api/v1/cctv/cameras/{sensorId}/fire-pipeline/stop")
     suspend fun stopFirePipeline(
         @Path("sensorId") sensorId: Int
     ): SimplePipelineResponse
 
     // ==========================================
-    // 작업자 / 이벤트 / 지도 / 센서 API
+    // Worker / Event / Map API
     // ==========================================
 
     @GET("api/worker")
@@ -142,16 +160,31 @@ interface JetsonApiService {
         @Body request: EventMeasuresReq
     ): Response<SimpleResponse>
 
-    @GET("api/maps/{jetsonId}")
-    suspend fun getFloorMap(
-        @Path("jetsonId") jetsonId: Int
+    /** space_id 기준 평면도 조회 (권장). */
+    @GET("api/maps/space/{spaceId}")
+    suspend fun getFloorMapBySpaceId(
+        @Path("spaceId") spaceId: Int
     ): FloorMapResponse
+
+    /** space_id 기준 배치 가능한 온습도 센서 조회 (권장). */
+    @GET("api/maps/space/{spaceId}/available-sensors")
+    suspend fun getAvailableTempSensorsForMapBySpace(
+        @Path("spaceId") spaceId: Int,
+        @Query("map_id") mapId: Int? = null
+    ): SensorListResponse
 
     @GET("api/maps/{mapId}/sensors")
     suspend fun getMapSensorPositions(
         @Path("mapId") mapId: Int
     ): SensorPositionListResponse
 
+    /** Deprecated: getFloorMapBySpaceId() 를 사용하세요. */
+    @GET("api/maps/{jetsonId}")
+    suspend fun getFloorMap(
+        @Path("jetsonId") jetsonId: Int
+    ): FloorMapResponse
+
+    /** Deprecated: getAvailableTempSensorsForMapBySpace() 를 사용하세요. */
     @GET("api/maps/{jetsonId}/available-sensors")
     suspend fun getAvailableTempSensorsForMap(
         @Path("jetsonId") jetsonId: Int,
@@ -168,26 +201,22 @@ interface JetsonApiService {
         @Path("sensorId") sensorId: String
     ): LatestTempHumidityResponse
 
-    // 실제 MariaDB worker 목록 조회
     @GET("api/v1/workers/db")
     suspend fun getDbWorkers(
         @Query("is_manager") isManager: Int = 0
     ): List<WorkerDbResponse>
 
-    // 사번으로 실제 MariaDB worker 조회
     @GET("api/v1/workers/db/{deptId}")
     suspend fun getDbWorker(
         @Path("deptId") deptId: Int
     ): WorkerDbResponse
 
-    // mDNS로 발견된 heart_band 워치를 작업자에게 등록 및 매핑
     @POST("api/v1/workers/{deptId}/assign-heart-band")
     suspend fun assignHeartBandToWorker(
         @Path("deptId") deptId: Int,
         @Body request: AssignHeartBandRequest
     ): AssignHeartBandResponse
 
-    // 작업자와 센서 매핑 해제
     @POST("api/v1/workers/{deptId}/unassign-sensor")
     suspend fun unassignWorkerSensor(
         @Path("deptId") deptId: Int

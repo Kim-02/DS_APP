@@ -43,7 +43,12 @@ class FloorMapViewModel : ViewModel() {
 
     fun loadAll() {
         val device = JetsonRepository.selectedJetson.value ?: return
-        val jetsonId = device.jetsonId ?: return
+        val spaceId = device.spaceId
+
+        if (spaceId == null) {
+            _message.value = "Jetson에 등록된 공간 정보가 없습니다."
+            return
+        }
 
         viewModelScope.launch {
             _isLoading.value = true
@@ -51,23 +56,29 @@ class FloorMapViewModel : ViewModel() {
                 val baseUrl = "http://${device.ipAddress}:${device.port}/"
                 val service = RetrofitClient.createService(baseUrl)
 
-                val mapResponse = service.getFloorMap(jetsonId)
+                // 평면도 조회: space_id 기준
+                val mapResponse = service.getFloorMapBySpaceId(spaceId)
                 if (mapResponse.status == "success") {
                     _floorMap.value = mapResponse.data
                 } else {
                     _message.value = "평면도 정보를 불러오지 못했습니다."
                 }
 
-                // 온습도 센서만 배치 대상으로 조회
-                val sensorResponse = service.getAvailableTempSensorsForMap(jetsonId)
+                // 배치 가능한 온습도 센서 조회: space_id 기준
+                val mapId = _floorMap.value?.mapId
+                val sensorResponse = service.getAvailableTempSensorsForMapBySpace(
+                    spaceId = spaceId,
+                    mapId = mapId
+                )
                 if (sensorResponse.status == "success") {
                     _availableSensors.value = sensorResponse.data
                 } else {
                     _availableSensors.value = emptyList()
                 }
 
-                _floorMap.value?.let { mapInfo ->
-                    val placedResponse = service.getMapSensorPositions(mapInfo.mapId)
+                // 이미 배치된 센서 위치 조회: map_id 기준 (기존 유지)
+                mapId?.let { mid ->
+                    val placedResponse = service.getMapSensorPositions(mid)
                     if (placedResponse.status == "success") {
                         _placedSensors.value = placedResponse.data
                     } else {

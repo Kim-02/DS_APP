@@ -17,6 +17,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -115,10 +116,26 @@ fun CctvListScreen(
                             Column(
                                 modifier = Modifier.padding(16.dp)
                             ) {
-                                Text(
-                                    text = camera.name,
-                                    style = MaterialTheme.typography.titleMedium
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = camera.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        modifier = Modifier.weight(1f)
+                                    )
+
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.deleteCamera(camera.id)
+                                        },
+                                        enabled = !isLoading
+                                    ) {
+                                        Text("삭제", color = Color.Red)
+                                    }
+                                }
 
                                 Spacer(modifier = Modifier.height(4.dp))
 
@@ -135,10 +152,18 @@ fun CctvListScreen(
                                 )
 
                                 Text(
-                                    text = "Process ID: ${camera.processId}",
+                                    text = "Space ID: ${camera.spaceId ?: "미지정"}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color.Gray
                                 )
+
+                                camera.spaceName?.let {
+                                    Text(
+                                        text = "공간: $it",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
 
                                 Spacer(modifier = Modifier.height(4.dp))
 

@@ -53,10 +53,24 @@ fun FloorMapScreen(
         viewModel.loadAll()
     }
 
+    val selectedJetson = com.example.ds_safer.data.repository.JetsonRepository.selectedJetson.collectAsState()
+    val spaceName = selectedJetson.value?.spaceName
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(floorMap?.mapName ?: "평면도 배치") },
+                title = {
+                    androidx.compose.foundation.layout.Column {
+                        Text(floorMap?.mapName ?: "평면도 배치")
+                        if (spaceName != null) {
+                            Text(
+                                text = spaceName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
                 navigationIcon = {
                     TextButton(onClick = onBackClick) {
                         Text("뒤로")

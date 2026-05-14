@@ -57,6 +57,8 @@ data class RegisteredSensor(
     @SerializedName("register_date") val registerDate: String? = null,
     @SerializedName("created_at") val createdAt: String? = null,
     @SerializedName("updated_at") val updatedAt: String? = null,
+    @SerializedName("space_id") val spaceId: Int? = null,
+    @SerializedName("space_name") val spaceName: String? = null,
 
     @SerializedName("placed") val placed: Int? = null,
     @SerializedName("x_ratio") val xRatio: Float? = null,
@@ -112,7 +114,8 @@ data class FloorMapResponse(
 
 data class FloorMapInfo(
     @SerializedName("map_id") val mapId: Int,
-    @SerializedName("jetson_id") val jetsonId: Int,
+    @SerializedName("jetson_id") val jetsonId: Int? = null,
+    @SerializedName("space_id") val spaceId: Int? = null,
     @SerializedName("map_name") val mapName: String,
     @SerializedName("image_base64") val imageBase64: String,
     @SerializedName("image_mime_type") val imageMimeType: String?,
@@ -220,12 +223,14 @@ data class UnassignSensorResponse(
 // 사용자는 IP/PW만 입력하고,
 // cameraUsername은 "admin" 기본값 사용
 // name은 앱에서 "CCTV-{IP}" 등으로 자동 생성
+// spaceId는 현재 선택된 Jetson의 spaceId를 사용 (하드코딩 금지)
 data class AppCameraRegisterRequest(
     @SerializedName("ip_address") val ipAddress: String,
     @SerializedName("camera_username") val cameraUsername: String = "admin",
     @SerializedName("camera_password") val cameraPassword: String,
     @SerializedName("name") val name: String,
-    @SerializedName("process_id") val processId: Int,
+    @SerializedName("space_id") val spaceId: Int?,
+    @SerializedName("jetson_id") val jetsonId: Int? = null,
     @SerializedName("rtsp_path") val rtspPath: String? = null
 )
 
@@ -233,13 +238,14 @@ data class AppCameraRegisterRequest(
 data class CameraCreateRequest(
     @SerializedName("device_id") val deviceId: String,
     @SerializedName("name") val name: String,
-    @SerializedName("process_id") val processId: Int,
+    @SerializedName("space_id") val spaceId: Int,
     @SerializedName("rtsp_url") val rtspUrl: String
 )
 
 data class CameraUpdateRequest(
     @SerializedName("name") val name: String? = null,
     @SerializedName("is_active") val isActive: Boolean? = null,
+    @SerializedName("space_id") val spaceId: Int? = null,
     @SerializedName("rtsp_url") val rtspUrl: String? = null
 )
 
@@ -247,7 +253,8 @@ data class CameraOutResponse(
     @SerializedName("id") val id: Int,
     @SerializedName("device_id") val deviceId: String,
     @SerializedName("name") val name: String,
-    @SerializedName("process_id") val processId: Int,
+    @SerializedName("space_id") val spaceId: Int,
+    @SerializedName("space_name") val spaceName: String? = null,
     @SerializedName("is_active") val isActive: Boolean,
     @SerializedName("registered_at") val registeredAt: String,
     @SerializedName("camera") val camera: CameraDetailResponse?
@@ -266,4 +273,49 @@ data class FirePipelineStatusResponse(
 data class SimplePipelineResponse(
     @SerializedName("status") val status: String,
     @SerializedName("camera_id") val cameraId: Int
+)
+
+// ==========================================
+// Jetson-space 등록 모델
+// ==========================================
+
+data class SpaceDto(
+    @SerializedName("space_id") val spaceId: Int,
+    @SerializedName("space_name") val spaceName: String
+)
+
+data class SpaceListResponse(
+    @SerializedName("success") val success: Boolean,
+    @SerializedName("data") val data: List<SpaceDto>
+)
+
+data class JetsonAppRegisterRequest(
+    @SerializedName("jetson_wp") val jetsonWp: String,
+    @SerializedName("jetson_loc") val jetsonLoc: String,
+    @SerializedName("jetson_status") val jetsonStatus: Boolean = true,
+    @SerializedName("ip_addr") val ipAddr: String,
+    @SerializedName("port") val port: Int = 8080,
+    @SerializedName("space_id") val spaceId: Int
+)
+
+data class JetsonAppRegisterResponse(
+    @SerializedName("success") val success: Boolean,
+    @SerializedName("message") val message: String,
+    @SerializedName("data") val data: JetsonOutDto? = null
+)
+
+data class JetsonOutDto(
+    @SerializedName("jetson_id") val jetsonId: Int,
+    @SerializedName("jetson_wp") val jetsonWp: String,
+    @SerializedName("jetson_loc") val jetsonLoc: String,
+    @SerializedName("jetson_status") val jetsonStatus: Boolean,
+    @SerializedName("ip_addr") val ipAddr: String,
+    @SerializedName("port") val port: Int,
+    @SerializedName("space_id") val spaceId: Int? = null,
+    @SerializedName("space_name") val spaceName: String? = null
+)
+
+data class JetsonUnregisterResponse(
+    @SerializedName("success") val success: Boolean,
+    @SerializedName("message") val message: String
 )

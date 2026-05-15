@@ -23,14 +23,4 @@ object RetrofitClient {
             .create(JetsonApiService::class.java)
     }
 
-    fun createWorkerService(baseUrl: String): JetsonApiService {
-        val finalizedUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
-
-        return Retrofit.Builder()
-            .baseUrl(finalizedUrl)
-            .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(JetsonApiService::class.java)
-    }
 }

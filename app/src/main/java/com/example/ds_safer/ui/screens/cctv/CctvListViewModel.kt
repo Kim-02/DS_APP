@@ -20,19 +20,6 @@ class CctvListViewModel : ViewModel() {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage = _errorMessage.asStateFlow()
 
-    private fun createServiceOrNull(): com.example.ds_safer.data.api.JetsonApiService? {
-        val selectedJetson = JetsonRepository.selectedJetson.value
-
-        if (selectedJetson == null) {
-            _errorMessage.value = "선택된 Jetson이 없습니다."
-            return null
-        }
-
-        return RetrofitClient.createService(
-            "http://${selectedJetson.ipAddress}:${selectedJetson.port}/"
-        )
-    }
-
     fun fetchCameras() {
         val selectedJetson = JetsonRepository.selectedJetson.value
 

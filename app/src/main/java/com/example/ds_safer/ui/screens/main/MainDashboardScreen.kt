@@ -55,6 +55,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.ds_safer.data.websocket.WebSocketManager
 import com.example.ds_safer.domain.model.HazardAlert
+import com.example.ds_safer.util.NotificationHelper
 import com.example.ds_safer.domain.model.JetsonDevice
 import com.example.ds_safer.ui.screens.discovery.DiscoveryViewModel
 import com.example.ds_safer.ui.theme.OnSafeCard
@@ -101,14 +102,21 @@ fun MainDashboardScreen(
 
         WebSocketManager.alertFlow.collect { alert ->
             alertHistory = listOf(alert) + alertHistory
-            WebSocketManager.sendSystemPushNotification(context, alert)
 
-            if (alert.vibration) {
+            NotificationHelper.showHazardNotification(
+                context = context,
+                eventId = alert.eventId?.toInt(),
+                title = alert.title ?: alert.evCodeName ?: "위험 감지 알림",
+                message = alert.message ?: "위험이 감지되었습니다.",
+                level = alert.level,
+            )
+
+            if (alert.vibration == true) {
                 val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
                 vibrator.vibrate(
                     VibrationEffect.createOneShot(
                         1000,
-                        VibrationEffect.DEFAULT_AMPLITUDE
+                        VibrationEffect.DEFAULT_AMPLITUDE,
                     )
                 )
             }
@@ -118,7 +126,7 @@ fun MainDashboardScreen(
     LaunchedEffect(registeredList) {
         val first = registeredList.firstOrNull()
         if (first != null) {
-            WebSocketManager.connect(first.ipAddress)
+            WebSocketManager.connect(first.ipAddress, first.port)
         }
     }
 
@@ -238,8 +246,12 @@ fun MainDashboardScreen(
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp)
                                 .clickable {
-                                    showNotificationSheet = false
-                                    onNavigateToReport(alert.eventId.toInt())
+                                    val eventId = alert.eventId?.toInt()
+
+                                    if (eventId != null) {
+                                        showNotificationSheet = false
+                                        onNavigateToReport(eventId)
+                                    }
                                 },
                             colors = CardDefaults.cardColors(
                                 containerColor = Color(0xFFFFEBEE)
@@ -258,12 +270,12 @@ fun MainDashboardScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = alert.message,
+                                        text = alert.message ?: "위험 알림이 발생했습니다.",
                                         color = Color.Red,
                                         style = MaterialTheme.typography.titleMedium
                                     )
                                     Text(
-                                        text = "카메라명: ${alert.cameraName}",
+                                        text = "카메라명: ${alert.cameraName ?: "알 수 없음"}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = Color.Gray
                                     )

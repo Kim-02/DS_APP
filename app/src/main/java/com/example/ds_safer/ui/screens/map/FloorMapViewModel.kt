@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ds_safer.data.api.RetrofitClient
+import com.example.ds_safer.data.repository.AlertRepository
 import com.example.ds_safer.data.repository.JetsonRepository
 import com.example.ds_safer.domain.model.FloorMapInfo
 import com.example.ds_safer.domain.model.RecentAlertDto
@@ -19,8 +20,8 @@ class FloorMapViewModel : ViewModel() {
     private val _floorMap = MutableStateFlow<FloorMapInfo?>(null)
     val floorMap = _floorMap.asStateFlow()
 
-    private val _recentAlerts = MutableStateFlow<List<RecentAlertDto>>(emptyList())
-    val recentAlerts = _recentAlerts.asStateFlow()
+    // AlertRepository StateFlow를 직접 노출 → WebSocket 수신 시 자동 갱신
+    val recentAlerts = AlertRepository.alerts
 
     private val _availableSensors = MutableStateFlow<List<RegisteredSensor>>(emptyList())
     val availableSensors = _availableSensors.asStateFlow()
@@ -112,11 +113,9 @@ class FloorMapViewModel : ViewModel() {
                 }
 
                 try {
-                    val alertResponse = service.getRecentAlerts(spaceId, 5)
-                    _recentAlerts.value = alertResponse.data
-                } catch (_: Exception) {
-                    _recentAlerts.value = emptyList()
-                }
+                    val alertResponse = service.getRecentAlerts(spaceId, 20)
+                    AlertRepository.setAlerts(alertResponse.data)
+                } catch (_: Exception) {}
 
             } catch (e: Exception) {
                 Log.e("FloorMapVM", "loadAll error", e)

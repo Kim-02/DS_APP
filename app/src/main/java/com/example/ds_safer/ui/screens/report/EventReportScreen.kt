@@ -10,7 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import AuthViewModel
-import com.example.ds_safer.data.api.RetrofitClient // 🌟 추가됨
+import com.example.ds_safer.data.api.RetrofitClient
+import com.example.ds_safer.data.repository.JetsonRepository
 import com.example.ds_safer.domain.model.EventMeasuresReq
 import kotlinx.coroutines.launch
 
@@ -97,10 +98,17 @@ fun EventReportScreen(
                     isSubmitting = true
                     coroutineScope.launch {
                         try {
-                            val request = EventMeasuresReq(eventId = eventId, measures = measures)
+                            val jetson = JetsonRepository.selectedJetson.value
+                            if (jetson == null) {
+                                Toast.makeText(context, "연결된 Jetson이 없습니다.", Toast.LENGTH_SHORT).show()
+                                isSubmitting = false
+                                return@launch
+                            }
 
-                            // 🌟 여기서 서비스 객체 생성 후 호출!
-                            val service = RetrofitClient.createWorkerService("http://192.168.0.66:8080/")
+                            val request = EventMeasuresReq(eventId = eventId, measures = measures)
+                            val service = RetrofitClient.createService(
+                                "http://${jetson.ipAddress}:${jetson.port}/"
+                            )
                             val response = service.postEventMeasures(request)
 
                             if (response.isSuccessful && response.body()?.status == "success") {

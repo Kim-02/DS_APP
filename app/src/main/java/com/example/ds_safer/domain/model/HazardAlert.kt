@@ -2,24 +2,31 @@ package com.example.ds_safer.domain.model
 
 import com.google.gson.annotations.SerializedName
 
-// 파이썬 api_payload 와 100% 일치하는 데이터 모델
 data class HazardAlert(
-    @SerializedName("event_id") val eventId: Long,
-    @SerializedName("target_topic") val targetTopic: String,
-    @SerializedName("type") val type: String,
-    @SerializedName("alert") val alert: Boolean,
+    @SerializedName("event_id") val eventId: Long? = null,
+    @SerializedName("target_topic") val targetTopic: String? = null,
+    @SerializedName("type") val type: String? = null,
+    @SerializedName("alert") val alert: Boolean? = null,
 
-    @SerializedName("message") val message: String,
-    @SerializedName("color") val color: String,
-    @SerializedName("vibration") val vibration: Boolean,
+    @SerializedName("title") val title: String? = null,
+    @SerializedName("message") val message: String? = null,
+    @SerializedName("level") val level: String? = null,
+    @SerializedName("source") val source: String? = null,
 
-    @SerializedName("camera_name") val cameraName: String,
-    @SerializedName("camera_loc") val cameraLoc: String,
-    @SerializedName("ev_code_name") val evCodeName: String,
-    @SerializedName("event_time") val eventTime: String,
+    @SerializedName("space_id") val spaceId: Int? = null,
+    @SerializedName("camera_sen_id") val cameraSenId: Int? = null,
+    @SerializedName("sensor_id") val sensorId: String? = null,
 
-    // 👇 보내주신 코드에 맞춰 추가된 3가지 항목!
-    @SerializedName("led") val led: Boolean,
-    @SerializedName("duration_ms") val durationMs: Long,
-    @SerializedName("reset_after_ms") val resetAfterMs: Long
+    @SerializedName("color") val color: String? = null,
+    @SerializedName("vibration") val vibration: Boolean? = null,
+
+    @SerializedName("camera_name") val cameraName: String? = null,
+    @SerializedName("camera_loc") val cameraLoc: String? = null,
+    @SerializedName("ev_code_name") val evCodeName: String? = null,
+    @SerializedName("event_time") val eventTime: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null,
+
+    @SerializedName("led") val led: Boolean? = null,
+    @SerializedName("duration_ms") val durationMs: Long? = null,
+    @SerializedName("reset_after_ms") val resetAfterMs: Long? = null
 )

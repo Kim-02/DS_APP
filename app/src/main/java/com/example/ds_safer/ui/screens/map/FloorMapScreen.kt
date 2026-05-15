@@ -42,13 +42,17 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -60,6 +64,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.example.ds_safer.data.api.RetrofitClient
+import com.example.ds_safer.data.repository.AlertRepository
+import com.example.ds_safer.data.repository.JetsonRepository
+import com.example.ds_safer.domain.model.RecentAlertDto
 import com.example.ds_safer.domain.model.RegisteredSensor
 import com.example.ds_safer.domain.model.SensorMapPosition
 import com.example.ds_safer.ui.theme.OnSafeCard
@@ -86,6 +94,22 @@ fun FloorMapScreen(
     var selectedSensorForPlace by remember { mutableStateOf<RegisteredSensor?>(null) }
     var selectedPlacedSensor by remember { mutableStateOf<SensorMapPosition?>(null) }
     var showPlaceGuide by remember { mutableStateOf(false) }
+    var selectedAlert by remember { mutableStateOf<RecentAlertDto?>(null) }
+    val scope = rememberCoroutineScope()
+
+    // 알림 읽음 처리
+    fun markAlertAsRead(alert: RecentAlertDto) {
+        val eventId = alert.eventId ?: return
+        if (alert.isRead == true) return
+        AlertRepository.markAsRead(eventId)
+        scope.launch {
+            try {
+                val device = JetsonRepository.selectedJetson.value ?: return@launch
+                val service = RetrofitClient.createService("http://${device.ipAddress}:${device.port}/")
+                service.markAlertAsRead(eventId, device.spaceId)
+            } catch (_: Exception) {}
+        }
+    }
 
     val bitmap = remember(floorMap?.imageBase64) {
         floorMap?.imageBase64?.let { decodeBase64ToBitmap(it) }
@@ -389,6 +413,32 @@ fun FloorMapScreen(
                 OnSafeSectionTitle("최근 알림")
             }
 
+            // 알림 상세 모달
+            selectedAlert?.let { alert ->
+                item {
+                    AlertDialog(
+                        onDismissRequest = { selectedAlert = null },
+                        containerColor = OnSafeColor.Card,
+                        titleContentColor = OnSafeColor.TextPrimary,
+                        textContentColor = OnSafeColor.TextSecondary,
+                        title = { Text(alert.title ?: "알림 상세") },
+                        text = {
+                            Column(
+                                modifier = Modifier.verticalScroll(rememberScrollState()).padding(vertical = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                if (!alert.createdAt.isNullOrBlank()) Text("발생 시간: ${alert.createdAt}", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = OnSafeColor.TextSecondary)
+                                if (!alert.cameraName.isNullOrBlank()) Text("카메라: ${alert.cameraName}", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = OnSafeColor.TextSecondary)
+                                if (!alert.level.isNullOrBlank()) Text("등급: ${alert.level}", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = OnSafeColor.TextSecondary)
+                                Spacer(Modifier.height(4.dp))
+                                Text(alert.message ?: "-", style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, color = OnSafeColor.TextPrimary)
+                            }
+                        },
+                        confirmButton = { TextButton(onClick = { selectedAlert = null }) { Text("닫기", color = OnSafeColor.Blue) } },
+                    )
+                }
+            }
+
             item {
                 if (recentAlerts.isEmpty()) {
                     OnSafeCard(modifier = Modifier.fillMaxWidth()) {
@@ -396,24 +446,32 @@ fun FloorMapScreen(
                             text = "최근 알림이 없습니다.",
                             color = OnSafeColor.TextSecondary,
                             style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(vertical = 8.dp)
+                            modifier = Modifier.padding(vertical = 8.dp),
                         )
                     }
                 } else {
                     OnSafeCard(modifier = Modifier.fillMaxWidth()) {
                         recentAlerts.take(3).forEachIndexed { index, alert ->
-                            val isRed = alert.level == "danger"
+                            val levelColor = when (alert.level) {
+                                "danger"  -> OnSafeColor.Red
+                                "warning" -> Color(0xFFFF9800)
+                                else      -> OnSafeColor.Blue
+                            }
                             AlertRow(
-                                color = if (isRed) OnSafeColor.Red else OnSafeColor.Blue,
+                                color = levelColor,
                                 title = alert.title ?: "알림",
                                 desc = alert.message ?: "",
                                 time = alert.createdAt?.takeLast(8)?.take(5) ?: "",
-                                badge = if (isRed) "위험" else "정보"
+                                badge = when (alert.level) { "danger" -> "위험"; "warning" -> "주의"; else -> "정보" },
+                                onClick = {
+                                    selectedAlert = alert
+                                    markAlertAsRead(alert)
+                                },
                             )
                             if (index < recentAlerts.take(3).size - 1) {
                                 Divider(
                                     color = OnSafeColor.StrokeSoft,
-                                    modifier = Modifier.padding(vertical = 10.dp)
+                                    modifier = Modifier.padding(vertical = 10.dp),
                                 )
                             }
                         }
@@ -644,9 +702,13 @@ private fun AlertRow(
     title: String,
     desc: String,
     time: String,
-    badge: String
+    badge: String,
+    onClick: (() -> Unit)? = null,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = if (onClick != null) Modifier.clickable { onClick() } else Modifier,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Box(
             modifier = Modifier
                 .size(30.dp)

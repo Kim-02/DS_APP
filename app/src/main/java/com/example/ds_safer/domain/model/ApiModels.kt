@@ -314,7 +314,12 @@ data class RecentAlertDto(
     @SerializedName("source") val source: String? = null,
     @SerializedName("camera_name") val cameraName: String? = null,
     @SerializedName("created_at") val createdAt: String? = null,
-    @SerializedName("is_read") val isRead: Int? = null
+    @SerializedName("is_read") val isRead: Boolean? = null,
+)
+
+data class MarkAsReadResponse(
+    @SerializedName("success") val success: Boolean? = null,
+    @SerializedName("message") val message: String? = null,
 )
 
 // ==========================================

@@ -5,6 +5,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -77,6 +78,12 @@ interface JetsonApiService {
         @Query("space_id") spaceId: Int,
         @Query("limit") limit: Int = 20
     ): RecentAlertsResponse
+
+    @PATCH("/api/v1/dashboard/alerts/{event_id}/read")
+    suspend fun markAlertAsRead(
+        @Path("event_id") eventId: Int,
+        @Query("space_id") spaceId: Int? = null
+    ): MarkAsReadResponse
 
     @GET("/api/v1/dashboard/sensors")
     suspend fun getDashboardSensors(

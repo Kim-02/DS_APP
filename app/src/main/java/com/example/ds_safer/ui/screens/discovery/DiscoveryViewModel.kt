@@ -1,22 +1,18 @@
 package com.example.ds_safer.ui.screens.discovery
 
-import AuthDataStore
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.ds_safer.data.api.JetsonRegisterRequest
 import com.example.ds_safer.data.api.RetrofitClient
 import com.example.ds_safer.data.repository.JetsonRepository
 import com.example.ds_safer.domain.model.JetsonDevice
 import com.example.ds_safer.util.nsd.NsdHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class DiscoveryViewModel(
-    private val nsdHelper: NsdHelper,
-    private val authDataStore: AuthDataStore
+    private val nsdHelper: NsdHelper
 ) : ViewModel() {
 
     private val _registeredJetsons = MutableStateFlow<List<JetsonDevice>>(emptyList())
@@ -123,38 +119,4 @@ class DiscoveryViewModel(
         }
     }
 
-    @Deprecated("Jetson 신규 등록은 JetsonSpaceRegisterScreen에서 space_id와 함께 처리하세요.")
-    fun registerDevice(device: JetsonDevice) {
-        viewModelScope.launch {
-            try {
-                val deptIdString = authDataStore.authFlow.first().deptId
-                val deptId = deptIdString.toIntOrNull() ?: 0
-
-                val service = RetrofitClient.createService(
-                    "http://${device.ipAddress}:${device.port}/"
-                )
-
-                val request = JetsonRegisterRequest(dept_id = deptId, app_id = "app1")
-                val response = service.registerJetson(request)
-
-                if (response.isSuccessful && response.body()?.register_status == "success") {
-                    val body = response.body()!!
-                    val parsedId = body.jetson_id
-                        .replace(Regex("[^0-9]"), "")
-                        .toIntOrNull() ?: 0
-
-                    val newDevice = device.copy(
-                        jetsonId = parsedId,
-                        status = true,
-                        isRegistered = true
-                    )
-
-                    JetsonRepository.selectJetson(newDevice)
-                    loadRegisteredJetsonsFromDiscoveredServers()
-                }
-            } catch (e: Exception) {
-                Log.e("DiscoveryViewModel", "구형 Jetson 등록 실패", e)
-            }
-        }
-    }
 }

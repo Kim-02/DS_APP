@@ -1,11 +1,16 @@
 package com.example.ds_safer
 
 import AuthDataStore
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.Surface
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -14,22 +19,38 @@ import AuthViewModel
 import com.example.ds_safer.ui.navigation.NavGraph
 import com.example.ds_safer.ui.screens.discovery.DiscoveryViewModel
 import com.example.ds_safer.ui.theme.DSSaferTheme
+import com.example.ds_safer.util.NotificationHelper
 import com.example.ds_safer.util.nsd.NsdHelper
 
 class MainActivity : ComponentActivity() {
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* 결과는 무시: 권한 거부 시 알림만 안 뜸 */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 1. 와이파이 레이더(NsdHelper) 및 데이터스토어 부품 생성
+        // 알림 채널 생성 (Android O+)
+        NotificationHelper.createChannel(this)
+
+        // Android 13+ 알림 권한 요청
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
         val nsdHelper = NsdHelper(this)
-        val authDataStore = AuthDataStore(this) // ★ 추가: 로컬 저장소(DataStore) 객체 생성
+        val authDataStore = AuthDataStore(this)
 
         setContent {
             DSSaferTheme {
                 val navController = rememberNavController()
 
-                // 2. AuthViewModel 공장(Factory) 가동
-                // AuthDataStore를 뷰모델 안에 쏙 넣어줍니다.
                 val authViewModel: AuthViewModel = viewModel(
                     factory = object : ViewModelProvider.Factory {
                         @Suppress("UNCHECKED_CAST")
@@ -39,22 +60,20 @@ class MainActivity : ComponentActivity() {
                     }
                 )
 
-                // 3. DiscoveryViewModel 공장(Factory) 가동
                 val discoveryViewModel: DiscoveryViewModel = viewModel(
                     factory = object : ViewModelProvider.Factory {
                         @Suppress("UNCHECKED_CAST")
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return DiscoveryViewModel(nsdHelper, authDataStore) as T
+                            return DiscoveryViewModel(nsdHelper) as T
                         }
                     }
                 )
 
                 Surface(color = MaterialTheme.colorScheme.background) {
-                    // 4. 완성된 뷰모델 2개를 전체 지도(NavGraph)에 장착!
                     NavGraph(
-                        authViewModel = authViewModel, // ★ 추가: 로그인 상태 관리를 위해 넘겨줌
+                        authViewModel = authViewModel,
                         navController = navController,
-                        discoveryViewModel = discoveryViewModel
+                        discoveryViewModel = discoveryViewModel,
                     )
                 }
             }

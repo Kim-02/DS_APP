@@ -140,48 +140,48 @@ fun FloorMapScreen(
         viewModel.loadAll()
     }
 
+    // 온습도 센서 정보 다이얼로그 (CCTV는 바로 streamingSensor로 가므로 여기엔 오지 않음)
     if (selectedPlacedSensor != null) {
         val sensor = selectedPlacedSensor!!
-        val isCctv = sensor.sensorType?.let { it.contains("camera", true) || it.contains("cctv", true) } == true
-        if (isCctv && sensor.senId != null) {
-            streamingSensor = sensor
-            selectedPlacedSensor = null
-        } else {
-            AlertDialog(
-                onDismissRequest = { selectedPlacedSensor = null },
-                containerColor = OnSafeColor.Card,
-                titleContentColor = OnSafeColor.TextPrimary,
-                textContentColor = OnSafeColor.TextSecondary,
-                title = { Text(sensor.senName ?: "센서 정보") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("센서 ID: ${sensor.sensorId}")
-                        Text("상태: ${if (sensor.isOnline == 1) "온라인" else "오프라인"}")
-                        Text("온도: ${sensor.latestTemp?.let { "%.1f°C".format(it) } ?: "-"}")
-                        Text("습도: ${sensor.latestHumidity?.let { "%.1f%%".format(it) } ?: "-"}")
-                        if (sensor.latestMeasuredAt != null) {
-                            Text(
-                                "측정 시각: ${sensor.latestMeasuredAt}",
-                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                                color = OnSafeColor.TextSecondary
-                            )
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { selectedPlacedSensor = null }) {
-                        Text("닫기", color = OnSafeColor.Blue)
+        AlertDialog(
+            onDismissRequest = { selectedPlacedSensor = null },
+            containerColor = OnSafeColor.Card,
+            titleContentColor = OnSafeColor.TextPrimary,
+            textContentColor = OnSafeColor.TextSecondary,
+            title = { Text(sensor.senName ?: "센서 정보") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("센서 ID: ${sensor.sensorId}")
+                    Text("상태: ${if (sensor.isOnline == 1) "온라인" else "오프라인"}")
+                    Text("온도: ${sensor.latestTemp?.let { "%.1f°C".format(it) } ?: "-"}")
+                    Text("습도: ${sensor.latestHumidity?.let { "%.1f%%".format(it) } ?: "-"}")
+                    if (sensor.latestMeasuredAt != null) {
+                        Text(
+                            "측정 시각: ${sensor.latestMeasuredAt}",
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                            color = OnSafeColor.TextSecondary
+                        )
                     }
                 }
-            )
-        }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedPlacedSensor = null }) {
+                    Text("닫기", color = OnSafeColor.Blue)
+                }
+            }
+        )
     }
 
     // CCTV 스트리밍 BottomSheet
-    if (streamingSensor != null && device != null) {
+    if (streamingSensor != null) {
         val cctv = streamingSensor!!
+        val ipAddress = device?.ipAddress ?: JetsonRepository.selectedJetson.value?.ipAddress
+        val port = device?.port ?: JetsonRepository.selectedJetson.value?.port ?: 8080
         // source=buffer: 기존 RTSP reader 재사용 → 추가 RTSP 연결 없음 (429 방지)
-        val streamUrl = "http://${device.ipAddress}:${device.port}/api/v1/cctv/cameras/${cctv.senId}/stream?source=buffer"
+        val streamUrl = if (ipAddress != null)
+            "http://$ipAddress:$port/api/v1/cctv/cameras/${cctv.senId}/stream?source=buffer"
+        else null
+        Log.d("FloorMap", "CCTV stream open senId=${cctv.senId} streamUrl=$streamUrl")
         ModalBottomSheet(
             onDismissRequest = { streamingSensor = null },
             sheetState = sheetState,
@@ -220,12 +220,12 @@ fun FloorMapScreen(
                     streamUrl = streamUrl,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
+                        .height(240.dp)
                         .background(Color.Black, RoundedCornerShape(12.dp))
                         .border(1.dp, OnSafeColor.Stroke, RoundedCornerShape(12.dp))
                 )
                 Text(
-                    text = "버퍼 재사용 스트리밍 (RTSP 추가 연결 없음)",
+                    text = streamUrl ?: "Jetson 정보를 불러올 수 없습니다.",
                     color = OnSafeColor.TextTertiary,
                     style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                 )
@@ -403,7 +403,18 @@ fun FloorMapScreen(
                         isPlacingMode = selectedSensorForPlace != null || selectedCctvForPlace != null,
                         imageSize = imageSize,
                         onImageSizeChanged = { imageSize = it },
-                        onPlacedSensorClick = { selectedPlacedSensor = it },
+                        onPlacedSensorClick = { sensor ->
+                            val isCctv = sensor.sensorType?.let {
+                                it.contains("camera", true) || it.contains("cctv", true)
+                            } == true
+                            if (isCctv && sensor.senId != null) {
+                                // 이벤트 핸들러에서 직접 set (Composition 밖)
+                                Log.d("FloorMap", "CCTV clicked sensorId=${sensor.sensorId} senId=${sensor.senId}")
+                                streamingSensor = sensor
+                            } else {
+                                selectedPlacedSensor = sensor
+                            }
+                        },
                         onMapTap = { xRatio, yRatio ->
                             val mapId = floorMap?.mapId ?: return@FloorMapCanvas
                             val sensorId = selectedSensorForPlace?.sensorId
@@ -990,34 +1001,21 @@ private fun AvailableCctvCard(
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun CctvMjpegView(streamUrl: String, modifier: Modifier = Modifier) {
-    val baseUrl = remember(streamUrl) {
-        try {
-            val uri = android.net.Uri.parse(streamUrl)
-            val port = if (uri.port > 0) ":${uri.port}" else ""
-            "${uri.scheme}://${uri.host}$port/"
-        } catch (_: Exception) { null }
+fun CctvMjpegView(streamUrl: String?, modifier: Modifier = Modifier) {
+    // null/blank/rtsp이면 안내 메시지만 표시
+    if (streamUrl.isNullOrBlank()) {
+        Box(modifier = modifier, contentAlignment = Alignment.Center) {
+            Text("스트리밍 URL이 없습니다.", color = Color.White)
+        }
+        return
+    }
+    if (streamUrl.startsWith("rtsp://")) {
+        Box(modifier = modifier, contentAlignment = Alignment.Center) {
+            Text("RTSP는 직접 지원되지 않습니다.\n서버 HTTP MJPEG URL이 필요합니다.", color = Color.White)
+        }
+        return
     }
 
-    val html = remember(streamUrl) {
-        """
-        <!DOCTYPE html><html>
-        <head><meta name="viewport" content="width=device-width,initial-scale=1">
-        <style>
-          body{margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh;}
-          img{max-width:100%;max-height:100%;object-fit:contain;}
-          #msg{color:#aaa;font-size:13px;font-family:sans-serif;display:none;}
-        </style></head>
-        <body>
-          <img src="$streamUrl"
-               onload="document.getElementById('msg').style.display='none'"
-               onerror="this.style.display='none';document.getElementById('msg').style.display='block'">
-          <div id="msg">스트림 연결 중...<br><small>$streamUrl</small></div>
-        </body></html>
-        """.trimIndent()
-    }
-
-    // WebView를 remember로 보관 → DisposableEffect에서 정리
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
     DisposableEffect(streamUrl) {
@@ -1028,7 +1026,7 @@ fun CctvMjpegView(streamUrl: String, modifier: Modifier = Modifier) {
                 wv.destroy()
             }
             webViewRef = null
-            Log.d("CctvMjpeg", "WebView destroyed for $streamUrl")
+            Log.d("CctvMjpeg", "WebView destroyed url=$streamUrl")
         }
     }
 
@@ -1036,34 +1034,34 @@ fun CctvMjpegView(streamUrl: String, modifier: Modifier = Modifier) {
         factory = { ctx ->
             WebView(ctx).apply {
                 settings.apply {
-                    javaScriptEnabled = true
+                    javaScriptEnabled = false
                     loadWithOverviewMode = true
                     useWideViewPort = true
                     mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
                 }
                 setBackgroundColor(0xFF000000.toInt())
                 webViewClient = object : WebViewClient() {
                     @Deprecated("Deprecated in Java")
-                    override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, url: String?) {
-                        Log.e("CctvMjpeg", "stream error code=$errorCode url=$url desc=$description")
+                    override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                        Log.e("CctvMjpeg", "error code=$errorCode url=$failingUrl desc=$description")
                     }
                     override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                        Log.e("CctvMjpeg", "stream error url=${request?.url} desc=${error?.description}")
+                        Log.e("CctvMjpeg", "error url=${request?.url} desc=${error?.description}")
                     }
                 }
                 webViewRef = this
-                // 최초 1회 load
-                loadDataWithBaseURL(baseUrl, html, "text/html", "UTF-8", null)
-                Log.d("CctvMjpeg", "WebView created, loading $streamUrl")
+                tag = streamUrl
+                Log.d("CctvMjpeg", "loadUrl=$streamUrl")
+                loadUrl(streamUrl)
             }
         },
         update = { webView ->
-            // tag로 마지막 로드 URL을 추적 → 동일하면 재load 안 함
-            val lastLoaded = webView.tag as? String
-            if (lastLoaded != streamUrl) {
+            val lastUrl = webView.tag as? String
+            if (lastUrl != streamUrl) {
                 webView.tag = streamUrl
-                webView.loadDataWithBaseURL(baseUrl, html, "text/html", "UTF-8", null)
-                Log.d("CctvMjpeg", "WebView reloaded $streamUrl")
+                Log.d("CctvMjpeg", "reload url=$streamUrl")
+                webView.loadUrl(streamUrl)
             }
         },
         modifier = modifier

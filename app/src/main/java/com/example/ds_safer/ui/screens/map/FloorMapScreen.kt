@@ -1,8 +1,15 @@
 package com.example.ds_safer.ui.screens.floormap
 
+import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
+import android.util.Log
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -14,6 +21,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,8 +32,10 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -36,15 +46,17 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -52,7 +64,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -64,9 +75,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.example.ds_safer.data.api.RetrofitClient
 import com.example.ds_safer.data.repository.AlertRepository
 import com.example.ds_safer.data.repository.JetsonRepository
+import com.example.ds_safer.domain.model.AvailableCctvDto
 import com.example.ds_safer.domain.model.RecentAlertDto
 import com.example.ds_safer.domain.model.RegisteredSensor
 import com.example.ds_safer.domain.model.SensorMapPosition
@@ -76,8 +89,10 @@ import com.example.ds_safer.ui.theme.OnSafeScreenBrush
 import com.example.ds_safer.ui.theme.OnSafeSectionTitle
 import com.example.ds_safer.ui.theme.OnSafeSmallPill
 import com.example.ds_safer.ui.theme.OnSafeStatusDot
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FloorMapScreen(
     viewModel: FloorMapViewModel,
@@ -85,6 +100,7 @@ fun FloorMapScreen(
 ) {
     val floorMap by viewModel.floorMap.collectAsState()
     val availableSensors by viewModel.availableSensors.collectAsState()
+    val availableCctvs by viewModel.availableCctvs.collectAsState()
     val placedSensors by viewModel.placedSensors.collectAsState()
     val recentAlerts by viewModel.recentAlerts.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -92,10 +108,15 @@ fun FloorMapScreen(
 
     var imageSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedSensorForPlace by remember { mutableStateOf<RegisteredSensor?>(null) }
+    var selectedCctvForPlace by remember { mutableStateOf<AvailableCctvDto?>(null) }
     var selectedPlacedSensor by remember { mutableStateOf<SensorMapPosition?>(null) }
+    var streamingSensor by remember { mutableStateOf<SensorMapPosition?>(null) }
     var showPlaceGuide by remember { mutableStateOf(false) }
     var selectedAlert by remember { mutableStateOf<RecentAlertDto?>(null) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+
+    val device = JetsonRepository.selectedJetson.value
 
     // 알림 읽음 처리
     fun markAlertAsRead(alert: RecentAlertDto) {
@@ -121,35 +142,100 @@ fun FloorMapScreen(
 
     if (selectedPlacedSensor != null) {
         val sensor = selectedPlacedSensor!!
-        AlertDialog(
-            onDismissRequest = { selectedPlacedSensor = null },
-            containerColor = OnSafeColor.Card,
-            titleContentColor = OnSafeColor.TextPrimary,
-            textContentColor = OnSafeColor.TextSecondary,
-            title = {
-                Text(sensor.senName ?: "센서 정보")
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("센서 ID: ${sensor.sensorId}")
-                    Text("상태: ${if (sensor.isOnline == 1) "온라인" else "오프라인"}")
-                    Text("온도: ${sensor.latestTemp?.let { "%.1f°C".format(it) } ?: "-"}")
-                    Text("습도: ${sensor.latestHumidity?.let { "%.1f%%".format(it) } ?: "-"}")
-                    if (sensor.latestMeasuredAt != null) {
-                        Text(
-                            "측정 시각: ${sensor.latestMeasuredAt}",
-                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                            color = OnSafeColor.TextSecondary
-                        )
+        val isCctv = sensor.sensorType?.let { it.contains("camera", true) || it.contains("cctv", true) } == true
+        if (isCctv && sensor.senId != null) {
+            streamingSensor = sensor
+            selectedPlacedSensor = null
+        } else {
+            AlertDialog(
+                onDismissRequest = { selectedPlacedSensor = null },
+                containerColor = OnSafeColor.Card,
+                titleContentColor = OnSafeColor.TextPrimary,
+                textContentColor = OnSafeColor.TextSecondary,
+                title = { Text(sensor.senName ?: "센서 정보") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("센서 ID: ${sensor.sensorId}")
+                        Text("상태: ${if (sensor.isOnline == 1) "온라인" else "오프라인"}")
+                        Text("온도: ${sensor.latestTemp?.let { "%.1f°C".format(it) } ?: "-"}")
+                        Text("습도: ${sensor.latestHumidity?.let { "%.1f%%".format(it) } ?: "-"}")
+                        if (sensor.latestMeasuredAt != null) {
+                            Text(
+                                "측정 시각: ${sensor.latestMeasuredAt}",
+                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                color = OnSafeColor.TextSecondary
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { selectedPlacedSensor = null }) {
+                        Text("닫기", color = OnSafeColor.Blue)
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { selectedPlacedSensor = null }) {
-                    Text("닫기", color = OnSafeColor.Blue)
+            )
+        }
+    }
+
+    // CCTV 스트리밍 BottomSheet
+    if (streamingSensor != null && device != null) {
+        val cctv = streamingSensor!!
+        // source=buffer: 기존 RTSP reader 재사용 → 추가 RTSP 연결 없음 (429 방지)
+        val streamUrl = "http://${device.ipAddress}:${device.port}/api/v1/cctv/cameras/${cctv.senId}/stream?source=buffer"
+        ModalBottomSheet(
+            onDismissRequest = { streamingSensor = null },
+            sheetState = sheetState,
+            containerColor = OnSafeColor.Card,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = cctv.senName ?: "CCTV",
+                            color = OnSafeColor.TextPrimary,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = cctv.sensorId,
+                            color = OnSafeColor.TextSecondary,
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    OnSafeStatusDot(
+                        color = if (cctv.isOnline == 1) OnSafeColor.Green else OnSafeColor.Gray,
+                        text = if (cctv.isOnline == 1) "온라인" else "오프라인"
+                    )
                 }
+                CctvMjpegView(
+                    streamUrl = streamUrl,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .background(Color.Black, RoundedCornerShape(12.dp))
+                        .border(1.dp, OnSafeColor.Stroke, RoundedCornerShape(12.dp))
+                )
+                Text(
+                    text = "버퍼 재사용 스트리밍 (RTSP 추가 연결 없음)",
+                    color = OnSafeColor.TextTertiary,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    text = "영상이 표시되지 않으면 Jetson에서 CCTV 파이프라인이 실행 중인지 확인하세요.",
+                    color = OnSafeColor.TextTertiary,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                )
             }
-        )
+        }
     }
 
     if (showPlaceGuide) {
@@ -288,7 +374,9 @@ fun FloorMapScreen(
 
                             Text(
                                 text = floorMap?.let {
-                                    "Map ID ${it.mapId} · 배치 센서 ${placedSensors.size}개 · 배치 가능 ${availableSensors.size}개"
+                                    val cctvCount = placedSensors.count { p -> p.sensorType?.let { t -> t.contains("camera", true) || t.contains("cctv", true) } == true }
+                                    val sensorCount = placedSensors.size - cctvCount
+                                    "Map ID ${it.mapId} · 센서 ${sensorCount}개 · CCTV ${cctvCount}개"
                                 } ?: "현재 공간에 등록된 평면도가 없습니다.",
                                 color = OnSafeColor.TextSecondary,
                                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall
@@ -312,24 +400,23 @@ fun FloorMapScreen(
                     FloorMapCanvas(
                         bitmap = bitmap,
                         placedSensors = placedSensors,
-                        selectedSensor = selectedSensorForPlace,
+                        isPlacingMode = selectedSensorForPlace != null || selectedCctvForPlace != null,
                         imageSize = imageSize,
                         onImageSizeChanged = { imageSize = it },
                         onPlacedSensorClick = { selectedPlacedSensor = it },
                         onMapTap = { xRatio, yRatio ->
-                            val sensor = selectedSensorForPlace
-                            val mapId = floorMap?.mapId
-                            val sensorId = sensor?.sensorId
-
-                            if (!sensorId.isNullOrBlank() && mapId != null) {
-                                viewModel.saveSensorPosition(
-                                    mapId = mapId,
-                                    sensorId = sensorId,
-                                    xRatio = xRatio,
-                                    yRatio = yRatio
-                                )
-                                selectedSensorForPlace = null
-                            }
+                            val mapId = floorMap?.mapId ?: return@FloorMapCanvas
+                            val sensorId = selectedSensorForPlace?.sensorId
+                                ?: selectedCctvForPlace?.sensorId
+                                ?: return@FloorMapCanvas
+                            viewModel.saveSensorPosition(
+                                mapId = mapId,
+                                sensorId = sensorId,
+                                xRatio = xRatio,
+                                yRatio = yRatio
+                            )
+                            selectedSensorForPlace = null
+                            selectedCctvForPlace = null
                         }
                     )
                 }
@@ -343,12 +430,14 @@ fun FloorMapScreen(
                     LegendDot("정상", OnSafeColor.Green)
                     LegendDot("경고", OnSafeColor.Orange)
                     LegendDot("위험", OnSafeColor.Red)
+                    LegendDot("CCTV", OnSafeColor.Blue)
                     LegendDot("오프라인", OnSafeColor.Gray)
                 }
             }
 
-            if (selectedSensorForPlace != null) {
+            if (selectedSensorForPlace != null || selectedCctvForPlace != null) {
                 item {
+                    val name = selectedSensorForPlace?.senName ?: selectedCctvForPlace?.senName ?: "항목"
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
@@ -365,11 +454,9 @@ fun FloorMapScreen(
                                 tint = OnSafeColor.Blue,
                                 modifier = Modifier.size(20.dp)
                             )
-
                             Spacer(modifier = Modifier.width(8.dp))
-
                             Text(
-                                text = "${selectedSensorForPlace?.senName ?: "센서"} 선택됨. 평면도를 터치해 위치를 저장하세요.",
+                                text = "$name 선택됨. 평면도를 터치해 위치를 저장하세요.",
                                 color = OnSafeColor.Blue,
                                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                             )
@@ -378,9 +465,7 @@ fun FloorMapScreen(
                 }
             }
 
-            item {
-                OnSafeSectionTitle("배치 가능한 센서")
-            }
+            item { OnSafeSectionTitle("배치 가능한 센서") }
 
             if (availableSensors.isEmpty()) {
                 item {
@@ -398,12 +483,35 @@ fun FloorMapScreen(
                         sensor = sensor,
                         selected = selectedSensorForPlace?.sensorId == sensor.sensorId,
                         onClick = {
+                            selectedCctvForPlace = null
                             selectedSensorForPlace =
-                                if (selectedSensorForPlace?.sensorId == sensor.sensorId) {
-                                    null
-                                } else {
-                                    sensor
-                                }
+                                if (selectedSensorForPlace?.sensorId == sensor.sensorId) null else sensor
+                        }
+                    )
+                }
+            }
+
+            item { OnSafeSectionTitle("배치 가능한 CCTV") }
+
+            if (availableCctvs.isEmpty()) {
+                item {
+                    EmptyGuideCard(
+                        title = "배치 가능한 CCTV가 없습니다.",
+                        message = "현재 공간에 등록된 CCTV가 없거나 이미 모두 배치되었습니다."
+                    )
+                }
+            } else {
+                items(
+                    items = availableCctvs,
+                    key = { it.sensorId }
+                ) { cctv ->
+                    AvailableCctvCard(
+                        cctv = cctv,
+                        selected = selectedCctvForPlace?.sensorId == cctv.sensorId,
+                        onClick = {
+                            selectedSensorForPlace = null
+                            selectedCctvForPlace =
+                                if (selectedCctvForPlace?.sensorId == cctv.sensorId) null else cctv
                         }
                     )
                 }
@@ -487,7 +595,7 @@ fun FloorMapScreen(
 private fun FloorMapCanvas(
     bitmap: Bitmap?,
     placedSensors: List<SensorMapPosition>,
-    selectedSensor: RegisteredSensor?,
+    isPlacingMode: Boolean,
     imageSize: IntSize,
     onImageSizeChanged: (IntSize) -> Unit,
     onPlacedSensorClick: (SensorMapPosition) -> Unit,
@@ -514,17 +622,13 @@ private fun FloorMapCanvas(
                     tint = OnSafeColor.Orange,
                     modifier = Modifier.size(34.dp)
                 )
-
                 Spacer(modifier = Modifier.height(10.dp))
-
                 Text(
                     text = "등록된 평면도가 없습니다.",
                     color = OnSafeColor.TextPrimary,
                     style = androidx.compose.material3.MaterialTheme.typography.titleMedium
                 )
-
                 Spacer(modifier = Modifier.height(4.dp))
-
                 Text(
                     text = "현재 space_id에 연결된 floor_map을 확인해주세요.",
                     color = OnSafeColor.TextSecondary,
@@ -536,9 +640,9 @@ private fun FloorMapCanvas(
                 modifier = Modifier
                     .fillMaxSize()
                     .onSizeChanged { onImageSizeChanged(it) }
-                    .pointerInput(selectedSensor) {
+                    .pointerInput(isPlacingMode) {
                         detectTapGestures { offset ->
-                            if (selectedSensor != null && imageSize.width > 0 && imageSize.height > 0) {
+                            if (isPlacingMode && imageSize.width > 0 && imageSize.height > 0) {
                                 val xRatio = (offset.x / imageSize.width).coerceIn(0f, 1f)
                                 val yRatio = (offset.y / imageSize.height).coerceIn(0f, 1f)
                                 onMapTap(xRatio, yRatio)
@@ -552,22 +656,13 @@ private fun FloorMapCanvas(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit
                 )
-
                 placedSensors.forEach { sensor ->
                     val x = (sensor.xRatio * imageSize.width).roundToInt()
                     val y = (sensor.yRatio * imageSize.height).roundToInt()
-
                     SensorMapMarker(
                         sensor = sensor,
-                        modifier = Modifier.offset {
-                            IntOffset(
-                                x = x - 14,
-                                y = y - 14
-                            )
-                        },
-                        onClick = {
-                            onPlacedSensorClick(sensor)
-                        }
+                        modifier = Modifier.offset { IntOffset(x = x - 14, y = y - 14) },
+                        onClick = { onPlacedSensorClick(sensor) }
                     )
                 }
             }
@@ -582,9 +677,11 @@ private fun SensorMapMarker(
     onClick: () -> Unit
 ) {
     val sensorType = sensor.sensorType ?: ""
+    val isCctv = sensorType.contains("camera", true) || sensorType.contains("cctv", true)
 
     val color = when {
         sensor.isOnline == 0 -> OnSafeColor.Gray
+        isCctv -> OnSafeColor.Blue
         sensorType.contains("gas", ignoreCase = true) -> OnSafeColor.Orange
         sensorType.contains("fire", ignoreCase = true) -> OnSafeColor.Red
         else -> OnSafeColor.Green
@@ -827,6 +924,150 @@ private fun MessageBox(
             )
         }
     }
+}
+
+@Composable
+private fun AvailableCctvCard(
+    cctv: AvailableCctvDto,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    OnSafeCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        selected = selected
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .background(OnSafeColor.Blue.copy(alpha = 0.16f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "C",
+                    color = OnSafeColor.Blue,
+                    style = androidx.compose.material3.MaterialTheme.typography.labelLarge
+                )
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = cctv.senName ?: "-",
+                    color = OnSafeColor.TextPrimary,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "ID: ${cctv.sensorId}",
+                    color = OnSafeColor.TextSecondary,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "IP: ${cctv.ipAddress ?: "미지정"} · ${if (cctv.placed == 1) "배치됨" else "미배치"}",
+                    color = OnSafeColor.TextTertiary,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                )
+            }
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    tint = OnSafeColor.Blue
+                )
+            } else if (cctv.placed == 1) {
+                OnSafeSmallPill("재배치", color = OnSafeColor.Orange)
+            } else {
+                OnSafeSmallPill("배치")
+            }
+        }
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun CctvMjpegView(streamUrl: String, modifier: Modifier = Modifier) {
+    val baseUrl = remember(streamUrl) {
+        try {
+            val uri = android.net.Uri.parse(streamUrl)
+            val port = if (uri.port > 0) ":${uri.port}" else ""
+            "${uri.scheme}://${uri.host}$port/"
+        } catch (_: Exception) { null }
+    }
+
+    val html = remember(streamUrl) {
+        """
+        <!DOCTYPE html><html>
+        <head><meta name="viewport" content="width=device-width,initial-scale=1">
+        <style>
+          body{margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh;}
+          img{max-width:100%;max-height:100%;object-fit:contain;}
+          #msg{color:#aaa;font-size:13px;font-family:sans-serif;display:none;}
+        </style></head>
+        <body>
+          <img src="$streamUrl"
+               onload="document.getElementById('msg').style.display='none'"
+               onerror="this.style.display='none';document.getElementById('msg').style.display='block'">
+          <div id="msg">스트림 연결 중...<br><small>$streamUrl</small></div>
+        </body></html>
+        """.trimIndent()
+    }
+
+    // WebView를 remember로 보관 → DisposableEffect에서 정리
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
+
+    DisposableEffect(streamUrl) {
+        onDispose {
+            webViewRef?.let { wv ->
+                wv.stopLoading()
+                wv.loadUrl("about:blank")
+                wv.destroy()
+            }
+            webViewRef = null
+            Log.d("CctvMjpeg", "WebView destroyed for $streamUrl")
+        }
+    }
+
+    AndroidView(
+        factory = { ctx ->
+            WebView(ctx).apply {
+                settings.apply {
+                    javaScriptEnabled = true
+                    loadWithOverviewMode = true
+                    useWideViewPort = true
+                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                }
+                setBackgroundColor(0xFF000000.toInt())
+                webViewClient = object : WebViewClient() {
+                    @Deprecated("Deprecated in Java")
+                    override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, url: String?) {
+                        Log.e("CctvMjpeg", "stream error code=$errorCode url=$url desc=$description")
+                    }
+                    override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                        Log.e("CctvMjpeg", "stream error url=${request?.url} desc=${error?.description}")
+                    }
+                }
+                webViewRef = this
+                // 최초 1회 load
+                loadDataWithBaseURL(baseUrl, html, "text/html", "UTF-8", null)
+                Log.d("CctvMjpeg", "WebView created, loading $streamUrl")
+            }
+        },
+        update = { webView ->
+            // tag로 마지막 로드 URL을 추적 → 동일하면 재load 안 함
+            val lastLoaded = webView.tag as? String
+            if (lastLoaded != streamUrl) {
+                webView.tag = streamUrl
+                webView.loadDataWithBaseURL(baseUrl, html, "text/html", "UTF-8", null)
+                Log.d("CctvMjpeg", "WebView reloaded $streamUrl")
+            }
+        },
+        modifier = modifier
+    )
 }
 
 private fun sensorMarkerText(sensorType: String): String {

@@ -125,6 +125,7 @@ data class SensorMapPosition(
     @SerializedName("sensor_id") val sensorId: String,
     @SerializedName("x_ratio") val xRatio: Float,
     @SerializedName("y_ratio") val yRatio: Float,
+    @SerializedName("sen_id") val senId: Int? = null,
     @SerializedName("sen_name") val senName: String?,
     @SerializedName("sensor_type") val sensorType: String?,
     @SerializedName("sen_locate") val senLocate: String?,
@@ -388,4 +389,29 @@ data class DashboardWorkerDto(
     @SerializedName("sensor_name") val sensorName: String? = null,
     @SerializedName("sensor_type") val sensorType: String? = null,
     @SerializedName("space_id") val spaceId: Int? = null
+)
+
+// ==========================================
+// 평면도 배치 가능한 CCTV
+// GET /api/maps/space/{space_id}/available-cctvs
+// ==========================================
+
+data class AvailableCctvListResponse(
+    @SerializedName("status") val status: String,
+    @SerializedName("data") val data: List<AvailableCctvDto>
+)
+
+data class AvailableCctvDto(
+    @SerializedName("sen_id") val senId: Int,
+    @SerializedName("sensor_id") val sensorId: String,
+    @SerializedName("sen_name") val senName: String? = null,
+    @SerializedName("sen_locate") val senLocate: String? = null,
+    @SerializedName("sensor_type") val sensorType: String? = null,
+    @SerializedName("is_online") val isOnline: Int? = null,
+    @SerializedName("ip_address") val ipAddress: String? = null,
+    @SerializedName("camera_id") val cameraId: String? = null,
+    @SerializedName("health") val health: Int? = null,
+    @SerializedName("placed") val placed: Int? = null,
+    @SerializedName("x_ratio") val xRatio: Float? = null,
+    @SerializedName("y_ratio") val yRatio: Float? = null
 )

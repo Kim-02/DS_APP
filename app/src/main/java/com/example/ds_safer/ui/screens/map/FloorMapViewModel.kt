@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.ds_safer.data.api.RetrofitClient
 import com.example.ds_safer.data.repository.AlertRepository
 import com.example.ds_safer.data.repository.JetsonRepository
+import com.example.ds_safer.domain.model.AvailableCctvDto
 import com.example.ds_safer.domain.model.FloorMapInfo
 import com.example.ds_safer.domain.model.RecentAlertDto
 import com.example.ds_safer.domain.model.RegisteredSensor
@@ -25,6 +26,9 @@ class FloorMapViewModel : ViewModel() {
 
     private val _availableSensors = MutableStateFlow<List<RegisteredSensor>>(emptyList())
     val availableSensors = _availableSensors.asStateFlow()
+
+    private val _availableCctvs = MutableStateFlow<List<AvailableCctvDto>>(emptyList())
+    val availableCctvs = _availableCctvs.asStateFlow()
 
     private val _placedSensors = MutableStateFlow<List<SensorMapPosition>>(emptyList())
     val placedSensors = _placedSensors.asStateFlow()
@@ -98,6 +102,20 @@ class FloorMapViewModel : ViewModel() {
                     _availableSensors.value = sensorResponse.data
                 } else {
                     _availableSensors.value = emptyList()
+                }
+
+                try {
+                    val cctvResponse = service.getAvailableCctvsForMapBySpace(
+                        spaceId = spaceId,
+                        mapId = mapId
+                    )
+                    if (cctvResponse.status == "success") {
+                        _availableCctvs.value = cctvResponse.data
+                    } else {
+                        _availableCctvs.value = emptyList()
+                    }
+                } catch (_: Exception) {
+                    _availableCctvs.value = emptyList()
                 }
 
                 if (mapId != null) {
@@ -204,10 +222,19 @@ class FloorMapViewModel : ViewModel() {
                             spaceId = spaceId,
                             mapId = mapId
                         )
-
                         if (sensorResponse.status == "success") {
                             _availableSensors.value = sensorResponse.data
                         }
+
+                        try {
+                            val cctvResponse = service.getAvailableCctvsForMapBySpace(
+                                spaceId = spaceId,
+                                mapId = mapId
+                            )
+                            if (cctvResponse.status == "success") {
+                                _availableCctvs.value = cctvResponse.data
+                            }
+                        } catch (_: Exception) {}
                     }
 
                     _selectedSensor.value = null

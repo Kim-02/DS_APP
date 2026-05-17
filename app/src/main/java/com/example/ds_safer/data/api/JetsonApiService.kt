@@ -157,6 +157,13 @@ interface JetsonApiService {
         @Query("map_id") mapId: Int? = null
     ): SensorListResponse
 
+    /** space_id 기준 배치 가능한 CCTV 조회. */
+    @GET("api/maps/space/{spaceId}/available-cctvs")
+    suspend fun getAvailableCctvsForMapBySpace(
+        @Path("spaceId") spaceId: Int,
+        @Query("map_id") mapId: Int? = null
+    ): AvailableCctvListResponse
+
     @GET("api/maps/{mapId}/sensors")
     suspend fun getMapSensorPositions(
         @Path("mapId") mapId: Int

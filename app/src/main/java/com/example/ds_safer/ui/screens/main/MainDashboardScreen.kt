@@ -1,10 +1,7 @@
 package com.example.ds_safer.ui.screens.main
 
 import android.Manifest
-import android.content.Context
 import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -51,11 +48,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.ds_safer.data.repository.AlertRepository
 import com.example.ds_safer.data.websocket.WebSocketManager
-import com.example.ds_safer.domain.model.HazardAlert
-import com.example.ds_safer.util.NotificationHelper
 import com.example.ds_safer.domain.model.JetsonDevice
 import com.example.ds_safer.ui.screens.discovery.DiscoveryViewModel
 import com.example.ds_safer.ui.theme.OnSafeCard
@@ -77,9 +72,7 @@ fun MainDashboardScreen(
 ) {
     val registeredList by viewModel.registeredJetsons.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
-    val context = LocalContext.current
-
-    var alertHistory by remember { mutableStateOf(listOf<HazardAlert>()) }
+    val alertHistory by AlertRepository.alerts.collectAsState()
     var showNotificationSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
@@ -97,30 +90,7 @@ fun MainDashboardScreen(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-
         viewModel.loadRegisteredJetsonsFromDiscoveredServers()
-
-        WebSocketManager.alertFlow.collect { alert ->
-            alertHistory = listOf(alert) + alertHistory
-
-            NotificationHelper.showHazardNotification(
-                context = context,
-                eventId = alert.eventId?.toInt(),
-                title = alert.title ?: alert.evCodeName ?: "위험 감지 알림",
-                message = alert.message ?: "위험이 감지되었습니다.",
-                level = alert.level,
-            )
-
-            if (alert.vibration == true) {
-                val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-                vibrator.vibrate(
-                    VibrationEffect.createOneShot(
-                        1000,
-                        VibrationEffect.DEFAULT_AMPLITUDE,
-                    )
-                )
-            }
-        }
     }
 
     LaunchedEffect(registeredList) {
@@ -162,11 +132,12 @@ fun MainDashboardScreen(
                     }
 
                     IconButton(onClick = { showNotificationSheet = true }) {
+                        val unreadCount = alertHistory.count { it.isRead != true }
                         BadgedBox(
                             badge = {
-                                if (alertHistory.isNotEmpty()) {
+                                if (unreadCount > 0) {
                                     Badge {
-                                        Text(alertHistory.size.toString())
+                                        Text(unreadCount.toString())
                                     }
                                 }
                             }
@@ -246,11 +217,9 @@ fun MainDashboardScreen(
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp)
                                 .clickable {
-                                    val eventId = alert.eventId?.toInt()
-
-                                    if (eventId != null) {
+                                    if (alert.eventId != null) {
                                         showNotificationSheet = false
-                                        onNavigateToReport(eventId)
+                                        onNavigateToReport(alert.eventId)
                                     }
                                 },
                             colors = CardDefaults.cardColors(

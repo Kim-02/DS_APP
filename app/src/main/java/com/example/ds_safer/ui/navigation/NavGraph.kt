@@ -13,6 +13,7 @@ import com.example.ds_safer.data.repository.JetsonRepository
 import com.example.ds_safer.data.websocket.WebSocketManager
 import com.example.ds_safer.ui.screens.detail.JetsonDetailScreen
 import com.example.ds_safer.ui.screens.discovery.DiscoveryViewModel
+import com.example.ds_safer.ui.screens.scenario.ScenarioVideoScreen
 import com.example.ds_safer.ui.screens.floormap.FloorMapScreen
 import com.example.ds_safer.ui.screens.floormap.FloorMapViewModel
 import com.example.ds_safer.ui.screens.jetson.JetsonSpaceRegisterScreen
@@ -38,6 +39,8 @@ sealed class Screen(val route: String) {
     object CctvRegistration : Screen("cctv_register")
 
     object FloorMap : Screen("floor_map")
+
+    object ScenarioVideo : Screen("scenario_video")
 
     object EventReport : Screen("event_report/{eventId}") {
         fun createRoute(eventId: Int) = "event_report/$eventId"
@@ -154,6 +157,9 @@ fun NavGraph(
                             launchSingleTop = true
                         }
                     },
+                    onNavigateToScenarioVideo = {
+                        navController.navigate(Screen.ScenarioVideo.route)
+                    },
                     onBackClick = {
                         navController.popBackStack()
                     }
@@ -254,6 +260,12 @@ fun NavGraph(
                         launchSingleTop = true
                     }
                 }
+            )
+        }
+
+        composable(Screen.ScenarioVideo.route) {
+            ScenarioVideoScreen(
+                onBackClick = { navController.popBackStack() }
             )
         }
 

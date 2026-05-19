@@ -88,6 +88,7 @@ fun JetsonDetailScreen(
     onNavigateToCctvRegister: () -> Unit,
     onNavigateToFloorMap: () -> Unit,
     onNavigateToProfile: () -> Unit,
+    onNavigateToScenarioVideo: () -> Unit,
     onBackClick: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -454,6 +455,9 @@ fun JetsonDetailScreen(
                     onClick = onNavigateToFloorMap,
                 )
             }
+            item {
+                ScenarioCard(onClick = onNavigateToScenarioVideo)
+            }
 
             item {
                 OutlinedButton(
@@ -719,6 +723,46 @@ private fun ActionMenuCard(
                 Text(description, color = OnSafeColor.TextSecondary, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
             }
             Icon(imageVector = Icons.Default.KeyboardArrowRight, contentDescription = null, tint = OnSafeColor.TextSecondary)
+        }
+    }
+}
+
+@Composable
+private fun ScenarioCard(onClick: () -> Unit) {
+    OnSafeCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(OnSafeColor.Red.copy(alpha = 0.12f), androidx.compose.foundation.shape.CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = OnSafeColor.Red,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "시나리오 3",
+                    color = OnSafeColor.Red,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "화재 위험 상황 영상 시연",
+                    color = OnSafeColor.TextSecondary,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowRight,
+                contentDescription = null,
+                tint = OnSafeColor.Red.copy(alpha = 0.6f),
+            )
         }
     }
 }

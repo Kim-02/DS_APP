@@ -290,17 +290,21 @@ private fun CctvManageCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = camera.name,
-                        color = OnSafeColor.TextPrimary,
+                        color = if (camera.isDemo == true) OnSafeColor.Red else OnSafeColor.TextPrimary,
                         style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
 
-                    OnSafeStatusDot(
-                        color = if (camera.isActive) OnSafeColor.Green else OnSafeColor.Gray,
-                        text = if (camera.isActive) "활성" else "비활성"
-                    )
+                    if (camera.isDemo == true) {
+                        OnSafeSmallPill("시연용", color = OnSafeColor.Red)
+                    } else {
+                        OnSafeStatusDot(
+                            color = if (camera.isActive) OnSafeColor.Green else OnSafeColor.Gray,
+                            text = if (camera.isActive) "활성" else "비활성"
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))

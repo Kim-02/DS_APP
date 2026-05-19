@@ -422,13 +422,17 @@ fun FloorMapScreen(
                         imageSize = imageSize,
                         onImageSizeChanged = { imageSize = it },
                         onPlacedSensorClick = { sensor ->
-                            val isCctv = sensor.sensorType?.let {
-                                it.contains("camera", true) || it.contains("cctv", true)
-                            } == true
+                            val isCctv = sensor.isCamera == true
+                                || sensor.sensorType?.let {
+                                    it.contains("camera", true)
+                                    || it.contains("cctv", true)
+                                    || it.contains("demo", true)
+                                } == true
+                            Log.d("FloorMap", "marker clicked sensorId=${sensor.sensorId} senId=${sensor.senId} type=${sensor.sensorType} isDemo=${sensor.isDemo} isCctv=$isCctv")
                             if (isCctv && sensor.senId != null) {
-                                Log.d("FloorMap", "CCTV clicked sensorId=${sensor.sensorId} senId=${sensor.senId} isDemo=${sensor.isDemo}")
-                                if (sensor.isDemo == true) {
-                                    // 시연용 CCTV → 앱 내부 demo video 재생
+                                if (sensor.isDemo == true
+                                    || sensor.streamUrl?.startsWith("demo://") == true) {
+                                    // 시연용 CCTV → 앱 내부 demo video 재생 + VLM 파이프라인
                                     demoCctvSensor = sensor
                                 } else {
                                     // 실제 CCTV → 서버 MJPEG 스트리밍
@@ -1111,11 +1115,32 @@ private fun DemoCctvBottomSheetContent(
     device: com.example.ds_safer.domain.model.JetsonDevice?,
     onDismiss: () -> Unit,
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
 
     var analyzeStatus by remember { mutableStateOf<String?>(null) }
     var isAnalyzing by remember { mutableStateOf(false) }
+
+    // BottomSheet가 열리는 즉시 VLM 파이프라인 자동 실행
+    LaunchedEffect(sensor.senId) {
+        val cameraSenId = sensor.senId ?: return@LaunchedEffect
+        val dev = device ?: return@LaunchedEffect
+        isAnalyzing = true
+        analyzeStatus = null
+        try {
+            val service = com.example.ds_safer.data.api.RetrofitClient
+                .createService("http://${dev.ipAddress}:${dev.port}/")
+            val resp = service.runDemoCctvAnalysis(cameraSenId)
+            analyzeStatus = if (resp.success) {
+                "✓ VLM 분석 시작. 결과는 알림으로 전달됩니다."
+            } else {
+                "분석 실패: ${resp.message}"
+            }
+        } catch (e: Exception) {
+            analyzeStatus = "오류: ${e.message}"
+        } finally {
+            isAnalyzing = false
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -1152,22 +1177,33 @@ private fun DemoCctvBottomSheetContent(
                 .background(Color.Black, RoundedCornerShape(12.dp))
         )
 
-        Text(
-            text = "이 영상은 시연을 위한 사전 준비 영상입니다.",
-            color = OnSafeColor.TextTertiary,
-            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-        )
-
-        analyzeStatus?.let { msg ->
-            val isSuccess = msg.startsWith("✓")
-            Text(
-                text = msg,
-                color = if (isSuccess) OnSafeColor.Green else OnSafeColor.Red,
-                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-            )
+        // 분석 상태 표시
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (isAnalyzing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 2.dp,
+                    color = OnSafeColor.Orange,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "VLM 파이프라인 실행 중...",
+                    color = OnSafeColor.Orange,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                )
+            } else {
+                analyzeStatus?.let { msg ->
+                    val isSuccess = msg.startsWith("✓")
+                    Text(
+                        text = msg,
+                        color = if (isSuccess) OnSafeColor.Green else OnSafeColor.Red,
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
         }
 
-        // VLM 분석 실행 버튼
+        // 재실행 버튼 (닫기 전에 다시 실행할 수 있도록 유지)
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1183,7 +1219,7 @@ private fun DemoCctvBottomSheetContent(
                                     .createService("http://${dev.ipAddress}:${dev.port}/")
                                 val resp = service.runDemoCctvAnalysis(cameraSenId)
                                 analyzeStatus = if (resp.success) {
-                                    "✓ VLM 분석 시작. 결과는 알림으로 전달됩니다."
+                                    "✓ VLM 분석 재실행. 결과는 알림으로 전달됩니다."
                                 } else {
                                     "분석 실패: ${resp.message}"
                                 }
@@ -1214,7 +1250,7 @@ private fun DemoCctvBottomSheetContent(
                 } else {
                     Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("VLM 분석 실행", color = Color.White, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+                    Text("VLM 분석 재실행", color = Color.White, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
                 }
             }
         }

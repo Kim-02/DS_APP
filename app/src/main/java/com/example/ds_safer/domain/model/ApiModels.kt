@@ -133,6 +133,8 @@ data class SensorMapPosition(
     @SerializedName("is_online") val isOnline: Int?,
     @SerializedName("is_demo") val isDemo: Boolean? = false,
     @SerializedName("demo_video_key") val demoVideoKey: String? = null,
+    @SerializedName("is_camera") val isCamera: Boolean? = false,
+    @SerializedName("stream_url") val streamUrl: String? = null,
     @SerializedName("latest_temp") val latestTemp: Float? = null,
     @SerializedName("latest_humidity") val latestHumidity: Float? = null,
     @SerializedName("latest_measured_at") val latestMeasuredAt: String? = null
@@ -222,6 +224,8 @@ data class CameraOutResponse(
     @SerializedName("space_id") val spaceId: Int,
     @SerializedName("space_name") val spaceName: String? = null,
     @SerializedName("is_active") val isActive: Boolean,
+    @SerializedName("is_demo") val isDemo: Boolean? = false,
+    @SerializedName("demo_video_key") val demoVideoKey: String? = null,
     @SerializedName("registered_at") val registeredAt: String,
     @SerializedName("camera") val camera: CameraDetailResponse?
 )

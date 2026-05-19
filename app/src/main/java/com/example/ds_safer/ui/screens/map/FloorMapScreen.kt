@@ -1,6 +1,7 @@
 package com.example.ds_safer.ui.screens.floormap
 
 import android.annotation.SuppressLint
+import android.net.Uri
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
@@ -111,6 +112,7 @@ fun FloorMapScreen(
     var selectedCctvForPlace by remember { mutableStateOf<AvailableCctvDto?>(null) }
     var selectedPlacedSensor by remember { mutableStateOf<SensorMapPosition?>(null) }
     var streamingSensor by remember { mutableStateOf<SensorMapPosition?>(null) }
+    var demoCctvSensor by remember { mutableStateOf<SensorMapPosition?>(null) }
     var showPlaceGuide by remember { mutableStateOf(false) }
     var selectedAlert by remember { mutableStateOf<RecentAlertDto?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -235,6 +237,22 @@ fun FloorMapScreen(
                     style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                 )
             }
+        }
+    }
+
+    // Demo CCTV BottomSheet — 앱 내부 raw 영상 재생 + VLM 분석 실행
+    if (demoCctvSensor != null) {
+        val cctv = demoCctvSensor!!
+        ModalBottomSheet(
+            onDismissRequest = { demoCctvSensor = null },
+            sheetState = sheetState,
+            containerColor = OnSafeColor.Card,
+        ) {
+            DemoCctvBottomSheetContent(
+                sensor = cctv,
+                device = device,
+                onDismiss = { demoCctvSensor = null },
+            )
         }
     }
 
@@ -408,9 +426,14 @@ fun FloorMapScreen(
                                 it.contains("camera", true) || it.contains("cctv", true)
                             } == true
                             if (isCctv && sensor.senId != null) {
-                                // 이벤트 핸들러에서 직접 set (Composition 밖)
-                                Log.d("FloorMap", "CCTV clicked sensorId=${sensor.sensorId} senId=${sensor.senId}")
-                                streamingSensor = sensor
+                                Log.d("FloorMap", "CCTV clicked sensorId=${sensor.sensorId} senId=${sensor.senId} isDemo=${sensor.isDemo}")
+                                if (sensor.isDemo == true) {
+                                    // 시연용 CCTV → 앱 내부 demo video 재생
+                                    demoCctvSensor = sensor
+                                } else {
+                                    // 실제 CCTV → 서버 MJPEG 스트리밍
+                                    streamingSensor = sensor
+                                }
                             } else {
                                 selectedPlacedSensor = sensor
                             }
@@ -1074,7 +1097,192 @@ private fun sensorMarkerText(sensorType: String): String {
         lower.contains("temp") || lower.contains("humid") || lower.contains("온습") -> "T"
         lower.contains("gas") || lower.contains("co") -> "G"
         lower.contains("fire") || lower.contains("smoke") -> "F"
-        lower.contains("camera") || lower.contains("cctv") -> "C"
+        lower.contains("camera") || lower.contains("cctv") || lower.contains("demo") -> "C"
         else -> "S"
+    }
+}
+
+// TODO: 앱 raw 영상 파일 추가 필요
+//   경로: app/src/main/res/raw/scenario3_fire.mp4
+//   ※ 서버 분석용 영상(media/demo_videos/scenario3_fire.mp4)과는 별개의 파일입니다.
+@Composable
+private fun DemoCctvBottomSheetContent(
+    sensor: com.example.ds_safer.domain.model.SensorMapPosition,
+    device: com.example.ds_safer.domain.model.JetsonDevice?,
+    onDismiss: () -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var analyzeStatus by remember { mutableStateOf<String?>(null) }
+    var isAnalyzing by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column {
+                Text(
+                    text = sensor.senName ?: "시연용 화재 CCTV",
+                    color = OnSafeColor.Red,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = "시연용 가상 CCTV",
+                    color = OnSafeColor.TextSecondary,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                )
+            }
+            OnSafeSmallPill("시연용", color = OnSafeColor.Red)
+        }
+
+        // 앱 내부 raw 영상 플레이어
+        DemoCctvVideoPlayer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .background(Color.Black, RoundedCornerShape(12.dp))
+        )
+
+        Text(
+            text = "이 영상은 시연을 위한 사전 준비 영상입니다.",
+            color = OnSafeColor.TextTertiary,
+            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+        )
+
+        analyzeStatus?.let { msg ->
+            val isSuccess = msg.startsWith("✓")
+            Text(
+                text = msg,
+                color = if (isSuccess) OnSafeColor.Green else OnSafeColor.Red,
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+            )
+        }
+
+        // VLM 분석 실행 버튼
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (!isAnalyzing) Modifier.clickable {
+                        val cameraSenId = sensor.senId ?: return@clickable
+                        val dev = device ?: return@clickable
+                        isAnalyzing = true
+                        analyzeStatus = null
+                        scope.launch {
+                            try {
+                                val service = com.example.ds_safer.data.api.RetrofitClient
+                                    .createService("http://${dev.ipAddress}:${dev.port}/")
+                                val resp = service.runDemoCctvAnalysis(cameraSenId)
+                                analyzeStatus = if (resp.success) {
+                                    "✓ VLM 분석 시작. 결과는 알림으로 전달됩니다."
+                                } else {
+                                    "분석 실패: ${resp.message}"
+                                }
+                            } catch (e: Exception) {
+                                analyzeStatus = "오류: ${e.message}"
+                            } finally {
+                                isAnalyzing = false
+                            }
+                        }
+                    } else Modifier
+                ),
+            shape = RoundedCornerShape(12.dp),
+            color = if (isAnalyzing) OnSafeColor.Gray else OnSafeColor.Orange,
+        ) {
+            Row(
+                modifier = Modifier.padding(vertical = 14.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (isAnalyzing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("분석 중...", color = Color.White, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+                } else {
+                    Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("VLM 분석 실행", color = Color.White, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxWidth().clickable { onDismiss() },
+            shape = RoundedCornerShape(12.dp),
+            color = OnSafeColor.CardSoft,
+            border = BorderStroke(1.dp, OnSafeColor.Stroke),
+        ) {
+            Text(
+                text = "닫기",
+                color = OnSafeColor.TextSecondary,
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(vertical = 14.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+        }
+    }
+}
+
+// TODO: 재생을 위해 app/src/main/res/raw/scenario3_fire.mp4 파일을 추가해야 합니다.
+//       파일이 없으면 안내 화면만 표시됩니다.
+//       ※ 서버 분석용 파일(media/demo_videos/scenario3_fire.mp4)과는 별개입니다.
+@Composable
+private fun DemoCctvVideoPlayer(modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val rawResId = remember {
+        context.resources.getIdentifier("scenario3_fire", "raw", context.packageName)
+    }
+
+    val player = remember(rawResId) {
+        if (rawResId == 0) return@remember null
+        androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+            val uri = Uri.parse("android.resource://${context.packageName}/$rawResId")
+            setMediaItem(androidx.media3.common.MediaItem.fromUri(uri))
+            prepare()
+            playWhenReady = true
+        }
+    }
+
+    DisposableEffect(player) {
+        onDispose { player?.release() }
+    }
+
+    if (rawResId == 0 || player == null) {
+        Box(modifier = modifier, contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.Warning, contentDescription = null, tint = OnSafeColor.Red, modifier = Modifier.size(32.dp))
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "영상 파일 없음\napp/src/main/res/raw/scenario3_fire.mp4",
+                    color = Color.White,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
+        }
+    } else {
+        AndroidView(
+            factory = { ctx ->
+                androidx.media3.ui.PlayerView(ctx).apply {
+                    this.player = player
+                    useController = true
+                }
+            },
+            modifier = modifier,
+        )
     }
 }

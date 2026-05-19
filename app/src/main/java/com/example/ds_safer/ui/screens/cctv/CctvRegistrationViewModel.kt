@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.ds_safer.data.api.RetrofitClient
 import com.example.ds_safer.data.repository.JetsonRepository
 import com.example.ds_safer.domain.model.AppCameraRegisterRequest
+import com.example.ds_safer.domain.model.RegisterDemoCctvRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -20,6 +21,9 @@ class CctvRegistrationViewModel : ViewModel() {
 
     private val _uiState = MutableStateFlow<CctvUiState>(CctvUiState.Idle)
     val uiState = _uiState.asStateFlow()
+
+    private val _demoUiState = MutableStateFlow<CctvUiState>(CctvUiState.Idle)
+    val demoUiState = _demoUiState.asStateFlow()
 
     fun registerCctv() {
         val selectedJetson = JetsonRepository.selectedJetson.value
@@ -93,6 +97,52 @@ class CctvRegistrationViewModel : ViewModel() {
                 e.printStackTrace()
                 _uiState.value = CctvUiState.Error(
                     e.message ?: "CCTV 등록 중 오류가 발생했습니다."
+                )
+            }
+        }
+    }
+
+    fun registerDemoCamera() {
+        val selectedJetson = JetsonRepository.selectedJetson.value
+        if (selectedJetson == null) {
+            _demoUiState.value = CctvUiState.Error("선택된 Jetson이 없습니다.")
+            return
+        }
+        val spaceId = selectedJetson.spaceId
+        if (spaceId == null || spaceId <= 0) {
+            _demoUiState.value = CctvUiState.Error("현재 Jetson에 등록된 공간 정보가 없습니다.")
+            return
+        }
+
+        viewModelScope.launch {
+            _demoUiState.value = CctvUiState.Loading
+            try {
+                val baseUrl = "http://${selectedJetson.ipAddress}:${selectedJetson.port}/"
+                val service = RetrofitClient.createService(baseUrl)
+
+                val response = service.registerDemoCctv(
+                    RegisterDemoCctvRequest(
+                        spaceId = spaceId,
+                        jetsonId = selectedJetson.jetsonId,
+                        name = "시연용 화재 CCTV",
+                        demoVideoKey = "scenario3_fire",
+                    )
+                )
+                if (response.success) {
+                    _demoUiState.value = CctvUiState.Success
+                } else {
+                    _demoUiState.value = CctvUiState.Error(
+                        response.message ?: "시연용 CCTV 등록에 실패했습니다."
+                    )
+                }
+            } catch (e: HttpException) {
+                val errorBody = e.response()?.errorBody()?.string()
+                _demoUiState.value = CctvUiState.Error(
+                    extractDetail(errorBody) ?: "시연용 CCTV 등록 실패 (${e.code()})"
+                )
+            } catch (e: Exception) {
+                _demoUiState.value = CctvUiState.Error(
+                    e.message ?: "시연용 CCTV 등록 중 오류가 발생했습니다."
                 )
             }
         }

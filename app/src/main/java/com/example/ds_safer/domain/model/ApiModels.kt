@@ -131,6 +131,8 @@ data class SensorMapPosition(
     @SerializedName("sen_locate") val senLocate: String?,
     @SerializedName("model") val model: String?,
     @SerializedName("is_online") val isOnline: Int?,
+    @SerializedName("is_demo") val isDemo: Boolean? = false,
+    @SerializedName("demo_video_key") val demoVideoKey: String? = null,
     @SerializedName("latest_temp") val latestTemp: Float? = null,
     @SerializedName("latest_humidity") val latestHumidity: Float? = null,
     @SerializedName("latest_measured_at") val latestMeasuredAt: String? = null
@@ -413,5 +415,31 @@ data class AvailableCctvDto(
     @SerializedName("health") val health: Int? = null,
     @SerializedName("placed") val placed: Int? = null,
     @SerializedName("x_ratio") val xRatio: Float? = null,
-    @SerializedName("y_ratio") val yRatio: Float? = null
+    @SerializedName("y_ratio") val yRatio: Float? = null,
+    @SerializedName("is_demo") val isDemo: Boolean? = false,
+    @SerializedName("demo_video_key") val demoVideoKey: String? = null
+)
+
+// ==========================================
+// 시연용 CCTV 등록
+// POST /api/v1/cctv/cameras/register-demo
+// ==========================================
+data class RegisterDemoCctvRequest(
+    @SerializedName("space_id") val spaceId: Int,
+    @SerializedName("jetson_id") val jetsonId: Int?,
+    @SerializedName("name") val name: String = "시연용 화재 CCTV",
+    @SerializedName("demo_video_key") val demoVideoKey: String = "scenario3_fire"
+)
+
+data class RegisterDemoCctvResponse(
+    @SerializedName("success") val success: Boolean,
+    @SerializedName("message") val message: String? = null,
+    @SerializedName("data") val data: Map<String, Any?>? = null
+)
+
+data class DemoAnalyzeResponse(
+    @SerializedName("success") val success: Boolean,
+    @SerializedName("message") val message: String? = null,
+    @SerializedName("camera_id") val cameraId: Int? = null,
+    @SerializedName("scenario_id") val scenarioId: String? = null
 )

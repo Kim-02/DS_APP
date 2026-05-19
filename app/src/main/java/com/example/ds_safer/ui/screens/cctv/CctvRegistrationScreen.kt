@@ -2,6 +2,7 @@ package com.example.ds_safer.ui.screens.cctv
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,10 +59,17 @@ fun CctvRegistrationScreen(
     onSuccess: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val demoUiState by viewModel.demoUiState.collectAsState()
     val selectedJetson by JetsonRepository.selectedJetson.collectAsState()
 
     LaunchedEffect(uiState) {
         if (uiState is CctvUiState.Success) {
+            onSuccess()
+        }
+    }
+
+    LaunchedEffect(demoUiState) {
+        if (demoUiState is CctvUiState.Success) {
             onSuccess()
         }
     }
@@ -274,7 +282,13 @@ fun CctvRegistrationScreen(
                         )
                     }
                 }
+            }
 
+            item {
+                DemoCctvRegisterCard(
+                    demoState = demoUiState,
+                    onRegisterClick = { viewModel.registerDemoCamera() }
+                )
                 Spacer(modifier = Modifier.height(20.dp))
             }
         }
@@ -357,6 +371,123 @@ private fun LoadingMessage() {
                 text = "CCTV 연결을 검증하고 등록하는 중입니다.",
                 color = OnSafeColor.TextSecondary,
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+@Composable
+private fun DemoCctvRegisterCard(
+    demoState: CctvUiState,
+    onRegisterClick: () -> Unit
+) {
+    Spacer(modifier = Modifier.height(8.dp))
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = OnSafeColor.Red.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, OnSafeColor.Red.copy(alpha = 0.35f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .background(OnSafeColor.Red.copy(alpha = 0.14f), androidx.compose.foundation.shape.CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = OnSafeColor.Red,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "시연용 CCTV 등록",
+                        color = OnSafeColor.Red,
+                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "사전에 준비된 화재 영상을 사용하는 가상 CCTV입니다.",
+                        color = OnSafeColor.TextSecondary,
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            when (demoState) {
+                is CctvUiState.Loading -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = OnSafeColor.Red
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "등록 중...",
+                            color = OnSafeColor.TextSecondary,
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+                is CctvUiState.Error -> {
+                    Text(
+                        text = demoState.message,
+                        color = OnSafeColor.Red,
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    DemoRegisterButton(enabled = true, onClick = onRegisterClick)
+                }
+                else -> {
+                    DemoRegisterButton(
+                        enabled = demoState !is CctvUiState.Loading,
+                        onClick = onRegisterClick
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DemoRegisterButton(enabled: Boolean, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (enabled) Modifier.clickable { onClick() } else Modifier),
+        shape = RoundedCornerShape(12.dp),
+        color = if (enabled) OnSafeColor.Red else OnSafeColor.Gray,
+    ) {
+        Row(
+            modifier = Modifier.padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = null,
+                tint = androidx.compose.ui.graphics.Color.White,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "시연용 CCTV 등록",
+                color = androidx.compose.ui.graphics.Color.White,
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium
             )
         }
     }

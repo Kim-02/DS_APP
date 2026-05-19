@@ -134,6 +134,18 @@ interface JetsonApiService {
         @Body request: AppCameraRegisterRequest
     ): CameraOutResponse
 
+    /** 시연용 가상 CCTV 등록. 실제 IP 카메라 없이 demo video를 DB에 등록. */
+    @POST("/api/v1/cctv/cameras/register-demo")
+    suspend fun registerDemoCctv(
+        @Body request: RegisterDemoCctvRequest
+    ): RegisterDemoCctvResponse
+
+    /** 시연용 CCTV의 demo video를 서버 VLM 파이프라인으로 분석 실행. */
+    @POST("/api/v1/cctv/cameras/{cameraSenId}/demo/analyze")
+    suspend fun runDemoCctvAnalysis(
+        @Path("cameraSenId") cameraSenId: Int
+    ): DemoAnalyzeResponse
+
     @DELETE("/api/v1/cctv/cameras/{sensorId}")
     suspend fun deleteCamera(
         @Path("sensorId") sensorId: Int

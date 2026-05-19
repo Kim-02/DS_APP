@@ -402,26 +402,45 @@ data class DashboardWorkerDto(
 // GET /api/maps/space/{space_id}/available-cctvs
 // ==========================================
 
-data class AvailableCctvListResponse(
-    @SerializedName("status") val status: String,
-    @SerializedName("data") val data: List<AvailableCctvDto>
+data class AvailableCctvsResponse(
+    @SerializedName("status")
+    val status: String,
+
+    @SerializedName("data")
+    val data: List<AvailableCctvDto> = emptyList()
 )
 
 data class AvailableCctvDto(
-    @SerializedName("sen_id") val senId: Int,
-    @SerializedName("sensor_id") val sensorId: String,
-    @SerializedName("sen_name") val senName: String? = null,
-    @SerializedName("sen_locate") val senLocate: String? = null,
-    @SerializedName("sensor_type") val sensorType: String? = null,
-    @SerializedName("is_online") val isOnline: Int? = null,
-    @SerializedName("ip_address") val ipAddress: String? = null,
-    @SerializedName("camera_id") val cameraId: String? = null,
-    @SerializedName("health") val health: Int? = null,
-    @SerializedName("placed") val placed: Int? = null,
-    @SerializedName("x_ratio") val xRatio: Float? = null,
-    @SerializedName("y_ratio") val yRatio: Float? = null,
-    @SerializedName("is_demo") val isDemo: Boolean? = false,
-    @SerializedName("demo_video_key") val demoVideoKey: String? = null
+    @SerializedName("sen_id")
+    val senId: Int? = null,
+    @SerializedName("sensor_id")
+    val sensorId: String? = null,
+    @SerializedName("sen_name")
+    val senName: String? = null,
+    @SerializedName("sen_locate")
+    val senLocate: String? = null,
+    @SerializedName("sensor_type")
+    val sensorType: String? = null,
+    @SerializedName("is_online")
+    val isOnline: Int? = null,
+    @SerializedName("ip_address")
+    val ipAddress: String? = null,
+    @SerializedName("camera_id")
+    val cameraId: String? = null,
+    @SerializedName("health")
+    val health: Int? = null,
+    @SerializedName("is_demo")
+    val isDemo: Boolean? = null,
+    @SerializedName("demo_video_key")
+    val demoVideoKey: String? = null,
+    @SerializedName("placed")
+    val placed: Boolean? = null,
+    @SerializedName("x_ratio")
+    val xRatio: Float? = null,
+    @SerializedName("y_ratio")
+    val yRatio: Float? = null,
+    @SerializedName("camera_sen_id")
+    val cameraSenId: Int? = null
 )
 
 // ==========================================

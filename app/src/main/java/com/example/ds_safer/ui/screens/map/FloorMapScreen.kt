@@ -529,23 +529,30 @@ fun FloorMapScreen(
                 }
             }
 
-            item { OnSafeSectionTitle("배치 가능한 CCTV") }
+            item {
+                OnSafeSectionTitle("CCTV 배치 관리")
+                // 로그: UI가 받은 availableCctvs 확인
+                android.util.Log.d(
+                    "FloorMapScreen",
+                    "availableCctvs size=${availableCctvs.size} items=${availableCctvs.map { "${it.senName}(demo=${it.isDemo},placed=${it.placed})" }}"
+                )
+            }
 
             if (availableCctvs.isEmpty()) {
                 item {
                     EmptyGuideCard(
-                        title = "배치 가능한 CCTV가 없습니다.",
-                        message = "현재 공간에 등록된 CCTV가 없거나 이미 모두 배치되었습니다."
+                        title = "등록된 CCTV가 없습니다.",
+                        message = "CCTV 등록하기에서 실제 CCTV 또는 시연용 CCTV를 먼저 등록하세요."
                     )
                 }
             } else {
                 items(
                     items = availableCctvs,
-                    key = { it.sensorId }
+                    key = { it.sensorId ?: "cctv_${it.senId ?: it.hashCode()}" }
                 ) { cctv ->
                     AvailableCctvCard(
                         cctv = cctv,
-                        selected = selectedCctvForPlace?.sensorId == cctv.sensorId,
+                        selected = selectedCctvForPlace?.sensorId != null && selectedCctvForPlace?.sensorId == cctv.sensorId,
                         onClick = {
                             selectedSensorForPlace = null
                             selectedCctvForPlace =
@@ -970,6 +977,14 @@ private fun AvailableCctvCard(
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val isDemo = cctv.isDemo == true
+    val isPlaced = cctv.placed == true
+    val markerColor = when {
+        isDemo    -> OnSafeColor.Red
+        isPlaced  -> OnSafeColor.Orange
+        else      -> OnSafeColor.Blue
+    }
+
     OnSafeCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -980,12 +995,12 @@ private fun AvailableCctvCard(
             Box(
                 modifier = Modifier
                     .size(42.dp)
-                    .background(OnSafeColor.Blue.copy(alpha = 0.16f), CircleShape),
+                    .background(markerColor.copy(alpha = 0.16f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "C",
-                    color = OnSafeColor.Blue,
+                    text = if (isDemo) "D" else "C",
+                    color = markerColor,
                     style = androidx.compose.material3.MaterialTheme.typography.labelLarge
                 )
             }
@@ -993,20 +1008,25 @@ private fun AvailableCctvCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = cctv.senName ?: "-",
-                    color = OnSafeColor.TextPrimary,
+                    color = if (isDemo) OnSafeColor.Red else OnSafeColor.TextPrimary,
                     style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "ID: ${cctv.sensorId}",
+                    text = "ID: ${cctv.sensorId ?: "-"}",
                     color = OnSafeColor.TextSecondary,
                     style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                val statusText = buildString {
+                    if (isDemo) append("시연용 · ")
+                    if (isPlaced) append("배치됨") else append("미배치")
+                    if (cctv.health == 0 && !isDemo) append(" · 연결 실패")
+                }
                 Text(
-                    text = "IP: ${cctv.ipAddress ?: "미지정"} · ${if (cctv.placed == 1) "배치됨" else "미배치"}",
+                    text = statusText,
                     color = OnSafeColor.TextTertiary,
                     style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                 )
@@ -1015,12 +1035,12 @@ private fun AvailableCctvCard(
                 Icon(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
-                    tint = OnSafeColor.Blue
+                    tint = markerColor
                 )
-            } else if (cctv.placed == 1) {
-                OnSafeSmallPill("재배치", color = OnSafeColor.Orange)
+            } else if (isPlaced) {
+                OnSafeSmallPill("위치변경", color = OnSafeColor.Orange)
             } else {
-                OnSafeSmallPill("배치")
+                OnSafeSmallPill("배치", color = markerColor)
             }
         }
     }

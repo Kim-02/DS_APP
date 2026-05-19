@@ -411,36 +411,29 @@ data class AvailableCctvsResponse(
 )
 
 data class AvailableCctvDto(
-    @SerializedName("sen_id")
-    val senId: Int? = null,
-    @SerializedName("sensor_id")
-    val sensorId: String? = null,
-    @SerializedName("sen_name")
-    val senName: String? = null,
-    @SerializedName("sen_locate")
-    val senLocate: String? = null,
-    @SerializedName("sensor_type")
-    val sensorType: String? = null,
-    @SerializedName("is_online")
-    val isOnline: Int? = null,
-    @SerializedName("ip_address")
-    val ipAddress: String? = null,
-    @SerializedName("camera_id")
-    val cameraId: String? = null,
-    @SerializedName("health")
-    val health: Int? = null,
-    @SerializedName("is_demo")
-    val isDemo: Boolean? = null,
-    @SerializedName("demo_video_key")
-    val demoVideoKey: String? = null,
-    @SerializedName("placed")
-    val placed: Boolean? = null,
-    @SerializedName("x_ratio")
-    val xRatio: Float? = null,
-    @SerializedName("y_ratio")
-    val yRatio: Float? = null,
-    @SerializedName("camera_sen_id")
-    val cameraSenId: Int? = null
+    @SerializedName("sen_id") val senId: Int,
+    @SerializedName("sensor_id") val sensorId: String,
+    @SerializedName("sensor_type") val sensorType: String? = null,
+    @SerializedName("sen_name") val senName: String? = null,
+    @SerializedName("sen_locate") val senLocate: String? = null,
+    @SerializedName("model") val model: String? = null,
+    @SerializedName("ip_addr") val ipAddr: String? = null,
+    @SerializedName("is_online") val isOnline: Int? = null,
+    @SerializedName("space_id") val spaceId: Int? = null,
+    @SerializedName("space_name") val spaceName: String? = null,
+    @SerializedName("ip_address") val ipAddress: String? = null,
+    @SerializedName("camera_id") val cameraId: String? = null,
+    @SerializedName("camera_pw") val cameraPw: String? = null,
+    @SerializedName("health") val health: Boolean? = null,
+    @SerializedName("is_demo") val isDemo: Boolean? = false,
+    @SerializedName("demo_video_key") val demoVideoKey: String? = null
+    @SerializedName("placed") val placed: Boolean? = null,
+    @SerializedName("position_id") val positionId: Int? = null,
+    @SerializedName("x_ratio") val xRatio: Float? = null,
+    @SerializedName("y_ratio") val yRatio: Float? = null,
+    @SerializedName("is_camera") val isCamera: Boolean? = null,
+    @SerializedName("camera_sen_id") val cameraSenId: Int? = null,
+    @SerializedName("stream_url") val streamUrl: String? = null,
 )
 
 // ==========================================
